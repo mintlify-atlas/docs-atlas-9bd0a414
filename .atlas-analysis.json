@@ -1,0 +1,136 @@
+{
+  "projectType": "saas",
+  "projectName": "CBDB Online Input System",
+  "projectDescription": "Online data entry and management system for the China Biographical Database (CBDB), enabling collaborative research on Chinese historical figures.",
+  "theme": "linden",
+  "primaryColor": "#590b0b",
+  "lightColor": "#a2747c",
+  "darkColor": "#ba9d9e",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "authentication"
+            ]
+          },
+          {
+            "group": "User Guide",
+            "pages": [
+              "user-guide/data-entry",
+              "user-guide/managing-records",
+              "user-guide/user-roles",
+              "user-guide/search-query"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/biographical-data",
+              "features/operations-history",
+              "features/data-export",
+              "features/view-tables"
+            ]
+          },
+          {
+            "group": "Administration",
+            "pages": [
+              "admin/user-management",
+              "admin/batch-operations",
+              "admin/audit-logs"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/architecture",
+              "development/database-schema",
+              "development/testing",
+              "development/deployment"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "api/overview",
+              "api/authentication"
+            ]
+          },
+          {
+            "group": "Offices & Postings",
+            "pages": [
+              "api/offices/list-by-category",
+              "api/offices/search-by-name",
+              "api/offices/query-postings"
+            ]
+          },
+          {
+            "group": "Entry Paths",
+            "pages": [
+              "api/entries/list-by-category",
+              "api/entries/search-by-name",
+              "api/entries/query-postings"
+            ]
+          },
+          {
+            "group": "Places",
+            "pages": [
+              "api/places/search",
+              "api/places/hierarchy"
+            ]
+          },
+          {
+            "group": "Relationships",
+            "pages": [
+              "api/relationships/query-relatives",
+              "api/relationships/social-associations",
+              "api/relationships/association-types"
+            ]
+          },
+          {
+            "group": "Social Networks",
+            "pages": [
+              "api/networks/query-network",
+              "api/networks/query-by-place"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multi-role user management (regular, expert, crowdsourcing, admin)",
+    "Biographical data entry for Chinese historical figures",
+    "Comprehensive relationship mapping (kinship, offices, associations)",
+    "Public API for querying historical data",
+    "Operations tracking and audit logging",
+    "SQLite data export and sync to HuggingFace",
+    "Advanced search and query capabilities",
+    "Batch data upload and management tools"
+  ],
+  "publicApiSurface": [
+    "/api/post_list - Query offices by category code",
+    "/api/entry_list - Query entry paths by category",
+    "/api/place_list - Search places by name and time period",
+    "/api/place_belongs_to - Query hierarchical place relationships",
+    "/api/office_list_by_name - Search offices by Chinese/English name",
+    "/api/entry_list_by_name - Search entry paths by name",
+    "/api/query_office_postings - Query office appointment records",
+    "/api/query_entry_postings - Query entry path records",
+    "/api/query_relatives_2 - Query kinship relationships",
+    "/api/get_assoc - Get association types",
+    "/api/find_assoc - Search associations by name",
+    "/api/query_associates - Query social associations",
+    "/api/query_assoc_network - Query social network with N-degree separation"
+  ]
+}
