@@ -1,0 +1,104 @@
+---
+title: "Search Entry Paths by Name"
+api: "GET https://input.cbdb.fas.harvard.edu/api/entry_list_by_name"
+description: "根據入仕途徑中英文名稱搜尋入仕途徑列表"
+---
+
+## Description
+
+This endpoint searches for entry paths by name (Chinese or English). It supports both exact and fuzzy matching.
+
+## Parameters
+
+<ParamField query="eName" type="string" required>
+  入仕途徑名稱（中文或英文，需經過 URL 編碼）
+  
+  The entry path name to search for. Must be URL-encoded.
+  
+  Examples:
+  - `%E7%94%9F%E5%93%A1` (生員)
+  - `%E7%B8%A3%E5%AD%B8%E7%94%9F%E5%93%A1` (縣學生員)
+</ParamField>
+
+<ParamField query="start" type="number">
+  開始筆數 (Starting record number)
+  
+  Default: `0`
+</ParamField>
+
+<ParamField query="list" type="number">
+  列表長度 (Maximum number of records to return)
+</ParamField>
+
+<ParamField query="accurate" type="number">
+  是否採用精確匹配
+  
+  - `0` - 模糊匹配 (Fuzzy match, default)
+  - `1` - 精確匹配 (Exact match)
+</ParamField>
+
+## Response
+
+<ResponseField name="total" type="number">
+  數據總筆數 (Total number of matching records)
+</ResponseField>
+
+<ResponseField name="start" type="number">
+  當前數據開始筆數 (Current starting record number)
+</ResponseField>
+
+<ResponseField name="end" type="number">
+  當前數據結束筆數 (Current ending record number)
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  入仕途徑列表 (Array of matching entry path records)
+  
+  <Expandable title="Entry Path Object">
+    <ResponseField name="eId" type="number">
+      entry_code - 入仕途徑代碼
+    </ResponseField>
+    
+    <ResponseField name="eName" type="string">
+      入仕途徑名稱（英文）
+    </ResponseField>
+    
+    <ResponseField name="eNameChn" type="string">
+      入仕途徑名稱（中文）
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+# Fuzzy search for entry paths containing "生員" (licentiate)
+# Returns first 2 results starting from record 1
+curl "https://input.cbdb.fas.harvard.edu/api/entry_list_by_name?eName=%E7%94%9F%E5%93%A1&start=1&list=2&accurate=0"
+
+# Exact match for "縣學生員" (county school student)
+# Returns first 2 results starting from record 1
+curl "https://input.cbdb.fas.harvard.edu/api/entry_list_by_name?eName=%E7%B8%A3%E5%AD%B8%E7%94%9F%E5%93%A1&start=1&list=2&accurate=1"
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "total": 100,
+  "start": 0,
+  "end": 2,
+  "data": [
+    {
+      "eId": "47",
+      "eName": "school: licentiate ",
+      "eNameChn": "學校：生員（庠生）"
+    },
+    {
+      "eId": "173",
+      "eName": "county school student",
+      "eNameChn": "縣學生員"
+    }
+  ]
+}
+```
+</ResponseExample>

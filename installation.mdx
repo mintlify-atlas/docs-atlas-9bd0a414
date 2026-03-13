@@ -1,0 +1,381 @@
+---
+title: Installation
+description: Set up the CBDB Online Input System development environment
+---
+
+## System Requirements
+
+Before installing, ensure your system meets the following requirements:
+
+### Required Software
+
+- **PHP**: 8.2 or higher (8.4 recommended for best performance and security)
+- **Database**: MariaDB 10.3.39 or higher
+- **Node.js**: 22.x (with npm 10.x)
+- **Composer**: Latest version for PHP dependency management
+- **Web Server**: Caddy (production) or PHP built-in server (development)
+
+<Warning>
+  **PHP 8.2+ is mandatory** for Laravel 12. The project will not run on PHP 8.1 or earlier versions. We strongly recommend PHP 8.4 as Laravel 12 fully supports it.
+</Warning>
+
+### Recommended Environment
+
+- **Memory**: At least 2GB RAM
+- **Disk Space**: 1GB for application files and dependencies
+- **Operating System**: Ubuntu 20.04+ or Debian-based Linux (production), macOS/Windows (development)
+
+## Installation Steps
+
+<Steps>
+  <Step title="Clone the Repository">
+    Clone the source code from GitHub:
+
+    ```bash
+    git clone https://github.com/cbdb-project/cbdb-online-main-server.git
+    cd cbdb-online-main-server
+    ```
+
+    <Note>
+      The main branch contains the stable production code. Use the `develop` branch for the latest features.
+    </Note>
+  </Step>
+
+  <Step title="Install PHP Dependencies">
+    Install Laravel and all required PHP packages using Composer:
+
+    ```bash
+    composer install
+    ```
+
+    This will install:
+    - Laravel 12.x framework
+    - Laravel Sanctum for API authentication
+    - Laravel UI for authentication scaffolding
+    - Guzzle HTTP client
+    - Carbon date/time library
+    - PHPMyAdmin SQL parser
+    - Prometheus metrics client
+
+    <Note>
+      The `composer.json` requires PHP `^8.2`. If you get version errors, check your PHP version with `php -v`.
+    </Note>
+  </Step>
+
+  <Step title="Install Node.js Dependencies">
+    Install frontend build tools and dependencies:
+
+    ```bash
+    npm install
+    ```
+
+    This installs the Vite build system, Vue 3, AdminLTE 3, Bootstrap 4, and other frontend packages.
+
+    <Tip>
+      Use **nvm** (Node Version Manager) to easily install and switch between Node.js versions:
+      
+      ```bash
+      # Install nvm
+      curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+      
+      # Install Node.js 22
+      nvm install 22
+      nvm use 22
+      
+      # Verify versions
+      node --version  # Should show v22.x.x
+      npm --version   # Should show 10.x.x
+      ```
+    </Tip>
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    Copy the example environment file and configure it:
+
+    ```bash
+    cp .env.example .env
+    ```
+
+    Edit `.env` and configure the essential settings:
+
+    ```bash .env
+    APP_NAME="CBDB Online"
+    APP_ENV=local
+    APP_DEBUG=true
+    APP_URL=http://localhost:8000
+
+    # Database Configuration
+    DB_CONNECTION=mysql
+    DB_HOST=127.0.0.1
+    DB_PORT=3306
+    DB_DATABASE=cbdb_online
+    DB_USERNAME=your_username
+    DB_PASSWORD=your_password
+    
+    # CRITICAL: Database timezone must match APP_TIMEZONE
+    # Use numeric offset format (+08:00), NOT named timezone (Asia/Shanghai)
+    # Named timezones require MySQL time zone tables and will cause errors
+    DB_TIMEZONE=+08:00
+
+    # Migration Database User (with schema modification privileges)
+    DB_MIGRATE_USERNAME=your_migrate_username
+    DB_MIGRATE_PASSWORD=your_migrate_password
+    ```
+
+    <Warning>
+      **Database Timezone Configuration**:
+      - `DB_TIMEZONE` must use **numeric offset format** (e.g., `+08:00`)
+      - Do NOT use named timezones (e.g., `Asia/Shanghai`) - they require MySQL time zone tables
+      - The timezone must match `APP_TIMEZONE` in `config/app.php` to prevent TIMESTAMP conversion issues
+    </Warning>
+
+    <Note>
+      **Separate Migration User**: For security, use two database accounts:
+      - `DB_USERNAME`: Regular application user (CRUD permissions only)
+      - `DB_MIGRATE_USERNAME`: Migration user (schema modification permissions)
+      
+      This prevents accidental schema changes during normal operation.
+    </Note>
+  </Step>
+
+  <Step title="Generate Application Key">
+    Generate a unique application encryption key:
+
+    ```bash
+    php artisan key:generate
+    ```
+
+    This sets the `APP_KEY` in your `.env` file, which Laravel uses for encryption and session security.
+  </Step>
+
+  <Step title="Create and Configure Database">
+    Create the database in MariaDB:
+
+    ```sql
+    CREATE DATABASE cbdb_online CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    
+    -- Create application user (CRUD only)
+    CREATE USER 'cbdb_app'@'localhost' IDENTIFIED BY 'your_password';
+    GRANT SELECT, INSERT, UPDATE, DELETE ON cbdb_online.* TO 'cbdb_app'@'localhost';
+    
+    -- Create migration user (schema modifications)
+    CREATE USER 'cbdb_migrate'@'localhost' IDENTIFIED BY 'your_migrate_password';
+    GRANT ALL PRIVILEGES ON cbdb_online.* TO 'cbdb_migrate'@'localhost';
+    
+    FLUSH PRIVILEGES;
+    ```
+
+    <Tip>
+      For development environments, you can use a single user with full privileges. The separation is primarily recommended for production.
+    </Tip>
+  </Step>
+
+  <Step title="Run Database Migrations">
+    Create all database tables and structure:
+
+    ```bash
+    php artisan migrate
+    ```
+
+    This will:
+    - Import the complete CBDB schema from `2025_01_01_000000_import_cbdb_schema.php`
+    - Create all biographical data tables (`BIOG_MAIN`, `KIN_DATA`, `POSTING_DATA`, etc.)
+    - Set up internal helper tables (`CBDB__NAME_FTS`, `CBDB__TRAD_SIMP_MAP`)
+    - Create user authentication tables
+    - Apply all subsequent schema updates
+
+    <Warning>
+      **Migration Compatibility**: All migrations must work with both MariaDB/MySQL and SQLite. The project uses helper functions `is_mysql()` and `is_sqlite()` to handle database-specific syntax.
+    </Warning>
+  </Step>
+
+  <Step title="Import Traditional-Simplified Character Mapping (Optional)">
+    If you need to support variant character normalization for pinyin conversion:
+
+    ```bash
+    php artisan cbdb:import-trad-simp-map --truncate
+    ```
+
+    This populates the `CBDB__TRAD_SIMP_MAP` table with OpenCC-based character mappings.
+  </Step>
+
+  <Step title="Build Frontend Assets">
+    Compile frontend assets using Vite:
+
+    ```bash
+    # For development (with hot reload)
+    npm run dev
+
+    # For production (minified)
+    npm run build
+    ```
+
+    The build process:
+    - Compiles Vue 3 components from `resources/js/components/`
+    - Bundles AdminLTE 3 and Bootstrap 4
+    - Processes SCSS stylesheets
+    - Outputs to `public/build/` directory
+
+    <Note>
+      Always run `npm run build` before committing code changes. The compiled assets in `public/build/` are tracked in git.
+    </Note>
+  </Step>
+
+  <Step title="Start Development Server">
+    Start the Laravel development server:
+
+    ```bash
+    php artisan serve
+    ```
+
+    The application will be available at `http://localhost:8000`.
+
+    For frontend hot reload during development, run Vite in a separate terminal:
+
+    ```bash
+    npm run dev
+    ```
+  </Step>
+</Steps>
+
+## Verify Installation
+
+Check that everything is working correctly:
+
+<CodeGroup>
+```bash Check PHP Version
+php -v
+# Should show PHP 8.2.x or higher (8.4.x recommended)
+```
+
+```bash Check Laravel Version
+php artisan --version
+# Should show Laravel Framework 12.x.x
+```
+
+```bash Check Database Connection
+php artisan tinker
+# Then run:
+DB::connection()->getPdo();
+# Should return PDO object without errors
+```
+
+```bash Check Node.js Version
+node --version  # Should show v22.x.x
+npm --version   # Should show 10.x.x
+```
+</CodeGroup>
+
+## Initial User Setup
+
+Create your first admin user to access the system. See the [Authentication](/authentication) guide for detailed instructions:
+
+```bash
+php artisan cbdb:manage-user \
+  --email=admin@example.com \
+  --name="Administrator" \
+  --password=your_secure_password \
+  --active=1 \
+  --role=super-admin
+```
+
+## Troubleshooting
+
+### Composer Install Fails
+
+<AccordionGroup>
+  <Accordion title="PHP version too old">
+    Error: `your PHP version (8.1.x) does not satisfy that requirement`
+
+    **Solution**: Upgrade to PHP 8.2 or higher. On Ubuntu:
+
+    ```bash
+    sudo add-apt-repository ppa:ondrej/php
+    sudo apt update
+    sudo apt install php8.4 php8.4-cli php8.4-mysql php8.4-xml php8.4-mbstring
+    ```
+  </Accordion>
+
+  <Accordion title="Missing PHP extensions">
+    Error: `ext-xxx is missing from your system`
+
+    **Solution**: Install required PHP extensions:
+
+    ```bash
+    # On Ubuntu/Debian
+    sudo apt install php8.4-mysql php8.4-xml php8.4-mbstring php8.4-curl php8.4-zip
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Database Migration Errors
+
+<AccordionGroup>
+  <Accordion title="Unknown or incorrect time zone">
+    Error: `SQLSTATE[HY000]: General error: 1298 Unknown or incorrect time zone`
+
+    **Solution**: Change `DB_TIMEZONE` in `.env` from named timezone to numeric offset:
+
+    ```bash
+    # ❌ Wrong (requires time zone tables)
+    DB_TIMEZONE=Asia/Shanghai
+
+    # ✅ Correct (works everywhere)
+    DB_TIMEZONE=+08:00
+    ```
+  </Accordion>
+
+  <Accordion title="Access denied for user">
+    Error: `SQLSTATE[HY000] [1045] Access denied for user`
+
+    **Solution**: Verify database credentials in `.env` and ensure the user has appropriate permissions.
+  </Accordion>
+</AccordionGroup>
+
+### NPM Build Issues
+
+<AccordionGroup>
+  <Accordion title="Wrong Node.js version">
+    Error: `The engine "node" is incompatible with this module`
+
+    **Solution**: Install Node.js 22 using nvm:
+
+    ```bash
+    nvm install 22
+    nvm use 22
+    ```
+  </Accordion>
+
+  <Accordion title="Build fails with ELIFECYCLE error">
+    **Solution**: Clear npm cache and reinstall:
+
+    ```bash
+    rm -rf node_modules
+    npm cache clear --force
+    npm install
+    npm run build
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+Now that your installation is complete:
+
+<CardGroup cols={2}>
+  <Card title="Authentication Setup" icon="key" href="/authentication">
+    Learn about user roles and create user accounts
+  </Card>
+  
+  <Card title="Data Entry Guide" icon="pen-to-square" href="/user-guide/data-entry">
+    Start entering biographical data
+  </Card>
+  
+  <Card title="Development Guide" icon="code" href="/development">
+    Contribute to the codebase
+  </Card>
+  
+  <Card title="API Reference" icon="brackets-curly" href="/api/overview">
+    Integrate with the CBDB API
+  </Card>
+</CardGroup>

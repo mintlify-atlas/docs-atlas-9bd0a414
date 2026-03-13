@@ -1,0 +1,297 @@
+---
+title: 'Query Social Associations'
+description: 'Query social relationships between people based on association types, locations, and time periods'
+---
+
+## Overview
+
+This endpoint allows you to query social associations (relationships) between people. You can filter by association type, location, index year, and geographic scope. The query finds people (X) who match your criteria and returns their associates (Y) who have the specified relationship.
+
+## Endpoint
+
+```
+POST https://input.cbdb.fas.harvard.edu/api/query_associates
+```
+
+## Request Parameters
+
+<ParamField body="association" type="array" required>
+  Array of association type IDs to query
+  
+  For example: `[22]` for "Student of" relationship
+</ParamField>
+
+<ParamField body="place" type="array">
+  Array of location IDs to filter people by
+</ParamField>
+
+<ParamField body="usePeoplePlace" type="number" default="0">
+  Whether to enable location filtering
+  - `1`: Enable location filter (use `place` parameter)
+  - `0`: Disable location filter (ignore `place` parameter)
+</ParamField>
+
+<ParamField body="useXy" type="number" default="0">
+  Whether to include geographic coordinates in results
+  - `1`: Include coordinates
+  - `0`: Exclude coordinates
+</ParamField>
+
+<ParamField body="indexYear" type="number" default="0">
+  Whether to filter by index year
+  - `1`: Enable index year filter (use `indexStartTime` and `indexEndTime`)
+  - `0`: Disable index year filter
+</ParamField>
+
+<ParamField body="indexStartTime" type="number">
+  Start year for index year filter (only used when `indexYear=1`)
+</ParamField>
+
+<ParamField body="indexEndTime" type="number">
+  End year for index year filter (only used when `indexYear=1`)
+</ParamField>
+
+<ParamField body="broad" type="number" default="0">
+  Geographic scope for location matching
+  - `1`: Broad scope (±0.06 degrees)
+  - `0`: Narrow scope (±0.03 degrees)
+</ParamField>
+
+## Request Examples
+
+### Example 1: Find Teachers
+
+Find all teachers (Y) of people (X) who lived in Jianzhou between 960-1250:
+
+```json
+{
+  "association": [22],
+  "place": [101125],
+  "usePeoplePlace": 1,
+  "useXy": 1,
+  "indexYear": 1,
+  "indexStartTime": 960,
+  "indexEndTime": 1250,
+  "broad": 0
+}
+```
+
+This query finds all people (X) whose index year is between 960-1250 and location is Jianzhou, then returns their teachers (Y).
+
+### Example 2: Find Students
+
+Find all students (Y) of people (X) located in Jianzhou:
+
+```json
+{
+  "association": [23],
+  "place": [101125],
+  "usePeoplePlace": 1,
+  "useXy": 1,
+  "indexYear": 0,
+  "indexStartTime": null,
+  "indexEndTime": null,
+  "broad": 0
+}
+```
+
+This query finds all people (X) located in Jianzhou, then returns their students (Y).
+
+## Response
+
+<ResponseField name="total" type="number">
+  Total number of records
+</ResponseField>
+
+<ResponseField name="start" type="number">
+  Starting record number
+</ResponseField>
+
+<ResponseField name="end" type="number">
+  Ending record number
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of association records
+
+  ### Center Person (X) Fields
+
+  <ResponseField name="pId" type="number">
+    Center person ID (the person matching your query criteria)
+  </ResponseField>
+
+  <ResponseField name="pName" type="string">
+    Center person name (English)
+  </ResponseField>
+
+  <ResponseField name="pNameChn" type="string">
+    Center person name (Chinese)
+  </ResponseField>
+
+  <ResponseField name="pSex" type="string">
+    Center person gender (M/F)
+  </ResponseField>
+
+  <ResponseField name="pIndexYear" type="number">
+    Center person index year
+  </ResponseField>
+
+  <ResponseField name="pAddrID" type="number">
+    Center person location ID
+  </ResponseField>
+
+  <ResponseField name="pAddrName" type="string">
+    Center person location name (English)
+  </ResponseField>
+
+  <ResponseField name="pAddrNameChn" type="string">
+    Center person location name (Chinese)
+  </ResponseField>
+
+  <ResponseField name="pX" type="number">
+    Center person location longitude
+  </ResponseField>
+
+  <ResponseField name="pY" type="number">
+    Center person location latitude
+  </ResponseField>
+
+  <ResponseField name="p_xy_count" type="number">
+    Number of people at center person's location in result set
+  </ResponseField>
+
+  <ResponseField name="pKinshipRelation" type="string">
+    Center person's kinship relationship (English)
+  </ResponseField>
+
+  <ResponseField name="pKinshipRelationChn" type="string">
+    Center person's kinship relationship (Chinese)
+  </ResponseField>
+
+  <ResponseField name="pKinName" type="string">
+    Center person's kinship relation name (English)
+  </ResponseField>
+
+  <ResponseField name="pKinNameChn" type="string">
+    Center person's kinship relation name (Chinese)
+  </ResponseField>
+
+  ### Associate (Y) Fields
+
+  <ResponseField name="aId" type="number">
+    Associate person ID
+  </ResponseField>
+
+  <ResponseField name="aName" type="string">
+    Associate name (English)
+  </ResponseField>
+
+  <ResponseField name="aNameChn" type="string">
+    Associate name (Chinese)
+  </ResponseField>
+
+  <ResponseField name="aSex" type="string">
+    Associate gender (M/F)
+  </ResponseField>
+
+  <ResponseField name="aIndexYear" type="number">
+    Associate index year
+  </ResponseField>
+
+  <ResponseField name="aAddrID" type="number">
+    Associate location ID
+  </ResponseField>
+
+  <ResponseField name="aAddrName" type="string">
+    Associate location name (English)
+  </ResponseField>
+
+  <ResponseField name="aAddrNameChn" type="string">
+    Associate location name (Chinese)
+  </ResponseField>
+
+  <ResponseField name="aX" type="number">
+    Associate location longitude
+  </ResponseField>
+
+  <ResponseField name="aY" type="number">
+    Associate location latitude
+  </ResponseField>
+
+  <ResponseField name="a_xy_count" type="number">
+    Number of people at associate's location in result set
+  </ResponseField>
+
+  <ResponseField name="aKinshipRelation" type="string">
+    Associate's kinship relationship (English)
+  </ResponseField>
+
+  <ResponseField name="aKinshipRelationChn" type="string">
+    Associate's kinship relationship (Chinese)
+  </ResponseField>
+
+  <ResponseField name="aKinName" type="string">
+    Associate's kinship relation name (English)
+  </ResponseField>
+
+  <ResponseField name="aKinNameChn" type="string">
+    Associate's kinship relation name (Chinese)
+  </ResponseField>
+
+  <ResponseField name="distance" type="number">
+    Geographic distance between center person and associate
+  </ResponseField>
+</ResponseField>
+
+## Response Example
+
+```json
+{
+  "total": 100,
+  "start": 1,
+  "end": 2,
+  "data": [
+    {
+      "pId": "46398",
+      "pName": "Liang Zhuan",
+      "pNameChn": "梁瑑",
+      "aId": "3257",
+      "aName": "Zhu Xi",
+      "aNameChn": "朱熹",
+      "pIndexYear": "",
+      "pSex": "M",
+      "aIndexYear": "1189",
+      "aSex": "M",
+      "pAddrID": "100577",
+      "pAddrName": "Shaowu",
+      "pAddrNameChn": "邵武",
+      "pX": "114.483398",
+      "pY": "27.337692",
+      "aAddrID": "101125",
+      "aAddrName": "Jianzhou",
+      "aAddrNameChn": "建州",
+      "aX": "118.32378387",
+      "aY": "27.038864136",
+      "pKinshipRelation": "U",
+      "pKinshipRelationChn": "未詳",
+      "pKinName": "Wei Xiang",
+      "pKinNameChn": "未詳",
+      "aKinshipRelation": "U",
+      "aKinshipRelationChn": "未詳",
+      "aKinName": "Wei Xiang",
+      "aKinNameChn": "未詳",
+      "distance": "89.516896410",
+      "p_xy_count": 17,
+      "a_xy_count": 7,
+      "KinRelCal": ""
+    }
+  ]
+}
+```
+
+## Notes
+
+- The `usePeoplePlace` parameter takes priority over the `place` parameter. When `usePeoplePlace=0`, the location filter is disabled regardless of the `place` value.
+- Geographic scope (`broad` parameter) controls how precisely locations must match. Use broad scope for historical regions with imprecise boundaries.
+- The relationship direction is important: association code `22` means "X is a student of Y", while code `23` means "X is a teacher of Y".
+- Use the [Get Association Types](/api/relationships/association-types) endpoint to find available association type IDs.

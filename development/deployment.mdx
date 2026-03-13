@@ -1,0 +1,615 @@
+---
+title: 'Deployment Guide'
+description: 'Deploy CBDB Online Input System to production environments'
+---
+
+## Production Requirements
+
+### System Requirements
+
+<CardGroup cols={2}>
+  <Card title="Server" icon="server">
+    - **OS**: Linux (Ubuntu 22.04+ or Debian 11+ recommended)
+    - **CPU**: 2+ cores
+    - **RAM**: 4GB minimum, 8GB recommended
+    - **Disk**: 20GB+ SSD storage
+  </Card>
+  
+  <Card title="Software" icon="code">
+    - **PHP**: 8.2+ (8.4 recommended)
+    - **Web Server**: Caddy (recommended) or Nginx
+    - **Database**: MariaDB 10.3.39+
+    - **Node.js**: 22.x for frontend builds
+  </Card>
+</CardGroup>
+
+### PHP Extensions
+
+Required PHP extensions:
+
+```bash
+sudo apt-get install -y \
+    php8.4-cli \
+    php8.4-fpm \
+    php8.4-mysql \
+    php8.4-sqlite3 \
+    php8.4-mbstring \
+    php8.4-xml \
+    php8.4-curl \
+    php8.4-zip \
+    php8.4-bcmath \
+    php8.4-gd
+```
+
+## Environment Configuration
+
+### Create .env File
+
+Copy the example environment file and configure:
+
+```bash
+cp .env.example .env
+```
+
+### Essential Environment Variables
+
+```bash .env
+# Application
+APP_NAME="CBDB Online Input System"
+APP_ENV=production
+APP_DEBUG=false
+APP_KEY=base64:... # Generate with: php artisan key:generate
+APP_URL=https://input.cbdb.fas.harvard.edu
+APP_TIMEZONE=Asia/Shanghai
+
+# Database - Application User (Limited Permissions)
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=cbdb
+DB_USERNAME=cbdb_app
+DB_PASSWORD=*** # Strong password
+DB_TIMEZONE=+08:00  # MUST match APP_TIMEZONE
+
+# Database - Migration User (Full Schema Permissions)
+DB_MIGRATE_USERNAME=cbdb_migrate
+DB_MIGRATE_PASSWORD=*** # Different strong password
+
+# Cache & Sessions
+CACHE_DRIVER=redis
+SESSION_DRIVER=redis
+QUEUE_CONNECTION=redis
+
+# Redis
+REDIS_HOST=127.0.0.1
+REDIS_PASSWORD=null
+REDIS_PORT=6379
+
+# Mail (for password resets)
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.example.com
+MAIL_PORT=587
+MAIL_USERNAME=null
+MAIL_PASSWORD=null
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=noreply@cbdb.fas.harvard.edu
+MAIL_FROM_NAME="${APP_NAME}"
+
+# Prometheus Metrics (Optional)
+PROMETHEUS_ENABLED=true
+PROMETHEUS_STORAGE_ADAPTER=redis
+```
+
+<Warning>
+**Critical**: The `DB_TIMEZONE` value **must** be a numeric offset (like `+08:00`), not a named timezone. MySQL/MariaDB named timezones require loading timezone tables, which can cause connection failures.
+</Warning>
+
+### Database User Separation
+
+For security, use separate database users:
+
+```sql
+-- Application user (limited permissions)
+CREATE USER 'cbdb_app'@'localhost' IDENTIFIED BY 'strong_password';
+GRANT SELECT, INSERT, UPDATE, DELETE ON cbdb.* TO 'cbdb_app'@'localhost';
+
+-- Migration user (schema modification permissions)
+CREATE USER 'cbdb_migrate'@'localhost' IDENTIFIED BY 'different_strong_password';
+GRANT ALL PRIVILEGES ON cbdb.* TO 'cbdb_migrate'@'localhost';
+
+FLUSH PRIVILEGES;
+```
+
+## Initial Deployment
+
+### 1. Clone Repository
+
+```bash
+cd /var/www
+git clone https://github.com/cbdb-project/cbdb-online-main-server.git cbdb
+cd cbdb
+```
+
+### 2. Install PHP Dependencies
+
+```bash
+composer install --optimize-autoloader --no-dev
+```
+
+<Note>
+The `--no-dev` flag excludes development dependencies (PHPUnit, PHP-CS-Fixer, etc.) from production.
+</Note>
+
+### 3. Generate Application Key
+
+```bash
+php artisan key:generate
+```
+
+### 4. Run Database Migrations
+
+Use the migration user credentials:
+
+```bash
+php artisan migrate --force
+```
+
+<Info>
+The `--force` flag is required in production environment. Migrations use the `DB_MIGRATE_USERNAME` credentials configured in your database connection.
+</Info>
+
+### 5. Build Frontend Assets
+
+Install Node.js dependencies and build production assets:
+
+```bash
+# Install Node.js 22 via nvm (if needed)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+source ~/.bashrc
+nvm install 22
+nvm use 22
+
+# Install dependencies and build
+npm install
+npm run prod
+
+# Clean up to save disk space
+rm -rf node_modules
+```
+
+This generates optimized assets in `public/build/`:
+- `public/build/assets/app-[hash].js`
+- `public/build/assets/app-[hash].css`
+- `public/build/manifest.json`
+
+### 6. Set Permissions
+
+```bash
+# Set ownership
+sudo chown -R www-data:www-data /var/www/cbdb
+
+# Set directory permissions
+sudo find /var/www/cbdb -type d -exec chmod 755 {} \;
+
+# Set file permissions
+sudo find /var/www/cbdb -type f -exec chmod 644 {} \;
+
+# Make storage and bootstrap/cache writable
+sudo chmod -R 775 storage bootstrap/cache
+```
+
+### 7. Optimize Laravel
+
+```bash
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+```
+
+## Web Server Configuration
+
+### Caddy (Recommended)
+
+Caddy automatically handles HTTPS certificates:
+
+```caddyfile /etc/caddy/Caddyfile
+input.cbdb.fas.harvard.edu {
+    root * /var/www/cbdb/public
+    encode gzip
+    
+    php_fastcgi unix//run/php/php8.4-fpm.sock
+    file_server
+    
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        X-XSS-Protection "1; mode=block"
+    }
+    
+    # Logging
+    log {
+        output file /var/log/caddy/cbdb-access.log
+    }
+}
+```
+
+Reload Caddy:
+
+```bash
+sudo systemctl reload caddy
+```
+
+### Nginx (Alternative)
+
+```nginx /etc/nginx/sites-available/cbdb
+server {
+    listen 80;
+    listen [::]:80;
+    server_name input.cbdb.fas.harvard.edu;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name input.cbdb.fas.harvard.edu;
+    
+    root /var/www/cbdb/public;
+    index index.php;
+    
+    ssl_certificate /etc/letsencrypt/live/input.cbdb.fas.harvard.edu/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/input.cbdb.fas.harvard.edu/privkey.pem;
+    
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+    
+    location ~ \.php$ {
+        fastcgi_pass unix:/run/php/php8.4-fpm.sock;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+    
+    location ~ /\.ht {
+        deny all;
+    }
+}
+```
+
+Enable site and reload:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/cbdb /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+## Deployment Script
+
+The repository includes `deploy.sh` for streamlined deployments:
+
+```bash deploy.sh
+#!/bin/bash
+set -e
+
+echo "开始部署..."
+
+# Generate version file
+if [ -d .git ]; then
+  git rev-parse --short=7 HEAD > version.txt
+  echo "版本号: $(cat version.txt)"
+else
+  echo "unknown" > version.txt
+fi
+
+# Install/update Composer dependencies
+composer install --optimize-autoloader
+
+# Trigger package discovery
+php artisan package:discover --ansi
+
+# Build frontend assets
+npm install
+npm run prod
+
+# Clean up
+rm -rf node_modules
+rm -rf "$HOME/.npm"
+
+# Clear caches
+php artisan cache:clear
+php artisan config:clear
+php artisan route:clear
+php artisan view:clear
+
+# Rebuild caches
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+
+echo "部署完成！"
+```
+
+### Using the Deployment Script
+
+```bash
+# Pull latest code
+git pull origin main
+
+# Run deployment script
+bash deploy.sh
+
+# Restart services (if needed)
+sudo systemctl restart php8.4-fpm
+```
+
+## Docker Deployment
+
+### Docker Compose Setup
+
+The repository includes `docker-compose.yml` for containerized deployment:
+
+```yaml docker-compose.yml
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: cbdb-frankenphp
+    volumes:
+      - .:/app
+      - vendor:/app/vendor
+      - node_modules:/app/node_modules
+      - db_data:/app/db-data
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      DB_CONNECTION: sqlite
+      DB_DATABASE: /app/db-data/database.sqlite3
+    ports:
+      - "8000:80"
+    networks:
+      - laravel-net
+
+networks:
+  laravel-net:
+    driver: bridge
+
+volumes:
+  vendor:
+  node_modules:
+  db_data:
+```
+
+### Docker Commands
+
+```bash
+# Build and start containers
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Run migrations
+docker-compose exec app php artisan migrate
+
+# Access container shell
+docker-compose exec app bash
+
+# Stop containers
+docker-compose down
+```
+
+## Monitoring & Maintenance
+
+### Application Logs
+
+```bash
+# Laravel logs
+tail -f storage/logs/laravel.log
+
+# Web server logs (Caddy)
+tail -f /var/log/caddy/cbdb-access.log
+
+# PHP-FPM logs
+tail -f /var/log/php8.4-fpm.log
+```
+
+### Health Checks
+
+```bash
+# Check application status
+curl https://input.cbdb.fas.harvard.edu/health
+
+# Check database connection
+php artisan tinker
+>>> DB::connection()->getPdo();
+```
+
+### Backup Strategy
+
+#### Database Backup
+
+```bash
+# Daily backup script
+mysqldump -u cbdb_migrate -p cbdb > /backups/cbdb_$(date +%Y%m%d).sql
+
+# Compressed backup
+mysqldump -u cbdb_migrate -p cbdb | gzip > /backups/cbdb_$(date +%Y%m%d).sql.gz
+```
+
+#### Automated Backups with Cron
+
+```bash
+# Edit crontab
+crontab -e
+
+# Add daily backup at 2 AM
+0 2 * * * /usr/bin/mysqldump -u cbdb_migrate -p'password' cbdb | gzip > /backups/cbdb_$(date +\%Y\%m\%d).sql.gz
+
+# Clean old backups (keep 30 days)
+0 3 * * * find /backups -name "cbdb_*.sql.gz" -mtime +30 -delete
+```
+
+### Maintenance Mode
+
+Enable maintenance mode during deployments:
+
+```bash
+# Enable maintenance mode
+php artisan down --message="Scheduled maintenance"
+
+# Perform deployment
+git pull
+bash deploy.sh
+php artisan migrate --force
+
+# Disable maintenance mode
+php artisan up
+```
+
+### Performance Optimization
+
+<AccordionGroup>
+  <Accordion title="OPcache Configuration">
+    ```ini /etc/php/8.4/fpm/conf.d/10-opcache.ini
+    opcache.enable=1
+    opcache.memory_consumption=256
+    opcache.interned_strings_buffer=16
+    opcache.max_accelerated_files=10000
+    opcache.validate_timestamps=0  # Disable in production
+    opcache.revalidate_freq=0
+    opcache.save_comments=1
+    ```
+  </Accordion>
+  
+  <Accordion title="PHP-FPM Pool Configuration">
+    ```ini /etc/php/8.4/fpm/pool.d/www.conf
+    pm = dynamic
+    pm.max_children = 50
+    pm.start_servers = 10
+    pm.min_spare_servers = 5
+    pm.max_spare_servers = 20
+    pm.max_requests = 500
+    ```
+  </Accordion>
+  
+  <Accordion title="Redis Caching">
+    ```bash
+    # Install Redis
+    sudo apt-get install redis-server
+    
+    # Configure in .env
+    CACHE_DRIVER=redis
+    SESSION_DRIVER=redis
+    QUEUE_CONNECTION=redis
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+  <Accordion title="500 Internal Server Error">
+    **Check Laravel logs**:
+    ```bash
+    tail -n 100 storage/logs/laravel.log
+    ```
+    
+    **Common causes**:
+    - Missing `.env` file
+    - Wrong file permissions on `storage/` or `bootstrap/cache/`
+    - Database connection failure
+    - Missing `APP_KEY`
+  </Accordion>
+  
+  <Accordion title="Assets Not Loading (404 errors)">
+    **Rebuild frontend assets**:
+    ```bash
+    npm install
+    npm run prod
+    ```
+    
+    **Check manifest**:
+    ```bash
+    cat public/build/manifest.json
+    ```
+  </Accordion>
+  
+  <Accordion title="Database Migration Errors">
+    **Check migration status**:
+    ```bash
+    php artisan migrate:status
+    ```
+    
+    **Rollback last migration**:
+    ```bash
+    php artisan migrate:rollback
+    ```
+    
+    **Fresh migration (⚠️ destructive)**:
+    ```bash
+    php artisan migrate:fresh --force
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Security Checklist
+
+<Steps>
+  <Step title="Disable Debug Mode">
+    Set `APP_DEBUG=false` in production `.env`
+  </Step>
+  
+  <Step title="Use Strong Database Passwords">
+    Generate secure passwords for `DB_PASSWORD` and `DB_MIGRATE_PASSWORD`
+  </Step>
+  
+  <Step title="Configure HTTPS">
+    Use SSL certificates (Caddy auto-configures, or use Certbot for Nginx)
+  </Step>
+  
+  <Step title="Set Correct File Permissions">
+    Ensure web server user owns files and `storage/` is writable
+  </Step>
+  
+  <Step title="Enable Firewall">
+    ```bash
+    sudo ufw allow 22/tcp
+    sudo ufw allow 80/tcp
+    sudo ufw allow 443/tcp
+    sudo ufw enable
+    ```
+  </Step>
+  
+  <Step title="Regular Updates">
+    Keep PHP, web server, and dependencies up to date
+  </Step>
+</Steps>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="sitemap" href="/development/architecture">
+    Understand the system architecture
+  </Card>
+  
+  <Card title="Testing" icon="flask" href="/development/testing">
+    Run tests before deploying
+  </Card>
+  
+  <Card title="Database Schema" icon="database" href="/development/database-schema">
+    Database migration reference
+  </Card>
+  
+  <Card title="Laravel Deployment" icon="external-link" href="https://laravel.com/docs/12.x/deployment">
+    Official Laravel deployment guide
+  </Card>
+</CardGroup>

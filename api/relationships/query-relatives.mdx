@@ -1,0 +1,234 @@
+---
+title: 'Query Relatives'
+description: 'Query kinship relationships using the five-degree kinship system'
+---
+
+## Overview
+
+This endpoint allows you to query kinship relationships for a given list of people using either the traditional five-degree kinship system (五服) or custom parameters to control search depth across different relationship types.
+
+## Endpoint
+
+```
+POST https://input.cbdb.fas.harvard.edu/api/query_relatives_2
+```
+
+## Request Parameters
+
+<ParamField body="people" type="array" required>
+  Array of person IDs to query relatives for
+</ParamField>
+
+<ParamField body="mCircle" type="number" default="0">
+  Whether to use the five-degree kinship system (五服查詢)
+  - `1`: Use five-degree system (ignores custom parameters)
+  - `0`: Use custom parameters below
+</ParamField>
+
+### Custom Search Parameters
+
+These parameters are only used when `mCircle=0`:
+
+<ParamField body="MAncGen" type="number">
+  Maximum ancestor distance (generations upward)
+</ParamField>
+
+<ParamField body="MDecGen" type="number">
+  Maximum descendant distance (generations downward)
+</ParamField>
+
+<ParamField body="MColLink" type="number">
+  Maximum collateral distance (siblings and cousins)
+</ParamField>
+
+<ParamField body="MMarLink" type="number">
+  Maximum marriage link distance (in-laws)
+</ParamField>
+
+<ParamField body="MLoop" type="number">
+  Maximum loop iterations for complex relationship chains
+</ParamField>
+
+## Request Example
+
+```json
+{
+  "people": [1762],
+  "mCircle": 0,
+  "MAncGen": 1,
+  "MDecGen": 1,
+  "MColLink": 1,
+  "MMarLink": 1,
+  "MLoop": 2
+}
+```
+
+This example queries Wang Anshi's (王安石) relatives with custom parameters: 1 generation up, 1 generation down, 1 degree of collateral relations, and 1 degree of marriage relations.
+
+## Response
+
+<ResponseField name="total" type="number">
+  Total number of records
+</ResponseField>
+
+<ResponseField name="start" type="number">
+  Starting record number
+</ResponseField>
+
+<ResponseField name="end" type="number">
+  Ending record number
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of relative records
+
+  <ResponseField name="rId" type="number">
+    Center person ID (the person you're querying for)
+  </ResponseField>
+
+  <ResponseField name="rName" type="string">
+    Center person name (English)
+  </ResponseField>
+
+  <ResponseField name="rNameChn" type="string">
+    Center person name (Chinese)
+  </ResponseField>
+
+  <ResponseField name="Id" type="number">
+    Relative's person ID
+  </ResponseField>
+
+  <ResponseField name="Name" type="string">
+    Relative's name (English)
+  </ResponseField>
+
+  <ResponseField name="NameChn" type="string">
+    Relative's name (Chinese)
+  </ResponseField>
+
+  <ResponseField name="IndexYear" type="number">
+    Relative's index year
+  </ResponseField>
+
+  <ResponseField name="sex" type="string">
+    Relative's gender (M/F)
+  </ResponseField>
+
+  <ResponseField name="rKinship" type="string">
+    Kinship relationship code relative to center person
+    
+    When the record represents the center person themselves, this field will be `'ego'`
+  </ResponseField>
+
+  <ResponseField name="up" type="number">
+    Upward search distance used
+  </ResponseField>
+
+  <ResponseField name="down" type="number">
+    Downward search distance used
+  </ResponseField>
+
+  <ResponseField name="col" type="number">
+    Collateral relationship distance used
+  </ResponseField>
+
+  <ResponseField name="mar" type="number">
+    Marriage relationship distance used
+  </ResponseField>
+
+  <ResponseField name="AddrID" type="number">
+    Relative's location ID
+  </ResponseField>
+
+  <ResponseField name="AddrType" type="string">
+    Relative's location type (English)
+  </ResponseField>
+
+  <ResponseField name="AddrTypeChn" type="string">
+    Relative's location type (Chinese)
+  </ResponseField>
+
+  <ResponseField name="AddrName" type="string">
+    Relative's location name (English)
+  </ResponseField>
+
+  <ResponseField name="AddrNameChn" type="string">
+    Relative's location name (Chinese)
+  </ResponseField>
+
+  <ResponseField name="X" type="number">
+    Relative's location longitude coordinate
+  </ResponseField>
+
+  <ResponseField name="Y" type="number">
+    Relative's location latitude coordinate
+  </ResponseField>
+
+  <ResponseField name="xy_count" type="number">
+    Number of people at this location in the result set
+  </ResponseField>
+
+  <ResponseField name="rDistance" type="number">
+    Geographic distance between relative's location and center person's location
+  </ResponseField>
+
+  <ResponseField name="Notes" type="string">
+    Additional notes about the relationship
+  </ResponseField>
+</ResponseField>
+
+## Response Example
+
+```json
+{
+  "total": 100,
+  "start": 1,
+  "end": 2,
+  "data": [
+    {
+      "rId": "1762",
+      "rName": "Wang Anshi",
+      "rNameChn": "王安石",
+      "pId": "1762",
+      "pName": "Wang Anshi",
+      "pNameChn": "王安石",
+      "pAddrID": "100513",
+      "pAddrType": "Basic Affiliation",
+      "pAddrTypeChn": "籍貫（基本地址）",
+      "pAddrName": "Linchuan",
+      "pAddrNameChn": "臨川",
+      "pX": "116.351341",
+      "pY": "27.984781",
+      "Id": "7404",
+      "Name": "Ye Tao",
+      "NameChn": "葉濤",
+      "IndexYear": "1080",
+      "sex": "M",
+      "pkinship": "DH",
+      "rKinship": "DH",
+      "up": 0,
+      "down": 1,
+      "col": 0,
+      "mar": 1,
+      "AddrID": "100650",
+      "AddrType": "Basic Affiliation",
+      "AddrTypeChn": "籍貫（基本地址）",
+      "AddrName": "Longquan",
+      "AddrNameChn": "龍泉",
+      "X": "119.12091",
+      "Y": "28.082565",
+      "xy_count": 1,
+      "pDistance": "272.04077877",
+      "rDistance": "272.04077877",
+      "KinRelCal": "",
+      "Notes": "據宋史列傳CBDB宋史分傳#1055"
+    }
+  ]
+}
+```
+
+## Notes
+
+- The `mCircle` parameter takes priority over custom parameters. When `mCircle=1`, the system uses the traditional five-degree kinship system regardless of `MAncGen`, `MDecGen`, `MColLink`, `MMarLink`, and `MLoop` values.
+- When the data includes the center person's own record, `rKinship` will be set to `'ego'` and fields starting with `p` will be empty strings.
+- The five-degree kinship system (五服) is a traditional Chinese kinship classification system that organizes relatives into five mourning grades based on closeness of relationship.

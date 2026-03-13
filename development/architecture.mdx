@@ -1,0 +1,367 @@
+---
+title: 'Architecture Overview'
+description: 'Technical architecture and design patterns used in CBDB Online Input System'
+---
+
+## System Architecture
+
+CBDB Online Input System is built on **Laravel 12.x** with a traditional MVC architecture, enhanced with Repository pattern for data access abstraction.
+
+### Technology Stack
+
+<CardGroup cols={2}>
+  <Card title="Backend" icon="server">
+    - **PHP 8.2+** (8.4 recommended)
+    - **Laravel 12.x** framework
+    - **MariaDB 10.3.39** (production)
+    - **SQLite** (testing)
+  </Card>
+  
+  <Card title="Frontend" icon="window">
+    - **Vue 3** for reactive components
+    - **Vite** build system
+    - **AdminLTE 3** UI framework
+    - **Bootstrap 4** CSS framework
+  </Card>
+</CardGroup>
+
+## Backend Architecture
+
+### MVC Pattern
+
+The application follows Laravel's MVC pattern with clear separation of concerns:
+
+```
+app/
+├── Http/
+│   ├── Controllers/          # Request handling and response
+│   │   ├── BasicInformationController.php
+│   │   ├── CodesController.php
+│   │   ├── OperationsController.php
+│   │   └── Api/              # RESTful API endpoints
+│   └── Middleware/           # Request filtering
+├── Models/                   # Eloquent ORM models
+│   ├── BiogMain.php
+│   ├── User.php
+│   └── Operation.php
+├── Repositories/             # Data access layer
+│   ├── BiogMainRepository.php
+│   ├── OperationRepository.php
+│   └── ToolsRepository.php
+└── Services/                 # Business logic
+    ├── NameSearchIndexService.php
+    └── VariantCharNormalizer.php
+```
+
+### Repository Pattern
+
+The system uses Repository pattern to abstract database operations:
+
+<CodeGroup>
+```php app/Repositories/BiogMainRepository.php
+class BiogMainRepository {
+    // Transaction-based office posting management
+    public function officeStoreById($personId, array $data): array {
+        return DB::transaction(function () use ($personId, $data) {
+            // Lock person record
+            $person = BiogMain::lockForUpdate()->find($personId);
+            
+            // Store office data
+            $office = $this->storeOfficeData($data);
+            
+            // Update addresses
+            $this->syncAddresses($office, $data['addresses'] ?? []);
+            
+            // Log operation
+            $this->logOperation($personId, $office, 'create');
+            
+            return $office;
+        });
+    }
+}
+```
+
+```php app/Repositories/OperationRepository.php
+class OperationRepository {
+    // Unified operation logging
+    public function store(array $data): Operation {
+        return Operation::create([
+            'resource_type' => $data['resource_type'],
+            'resource_id' => $data['resource_id'],
+            'op_type' => $data['op_type'], // 1=create, 2=update, 3=restore, 4=delete
+            'resource_data' => json_encode($data['resource_data']),
+            'user_name' => auth()->user()->name ?? 'system',
+        ]);
+    }
+}
+```
+</CodeGroup>
+
+### Model Design
+
+#### Single Primary Key Tables
+
+Use **Eloquent ORM** for tables with single primary keys:
+
+```php app/Models/BiogMain.php
+class BiogMain extends Model {
+    protected $table = 'BIOG_MAIN';
+    protected $primaryKey = 'c_personid';
+    public $timestamps = false;
+    
+    // Relationships
+    public function altnames() {
+        return $this->hasMany(AltnameData::class, 'c_personid');
+    }
+}
+```
+
+#### Composite Primary Key Tables
+
+For tables with **composite primary keys**, use **Query Builder** directly:
+
+```php
+// ❌ Avoid: Eloquent doesn't support composite keys natively
+// AltnameData model would have issues with delete()/update()
+
+// ✅ Correct: Use DB facade for composite key tables
+DB::table('ALTNAME_DATA')
+    ->where('c_personid', $personId)
+    ->where('c_sequence', $sequence)
+    ->where('c_alt_name_chn', $name)
+    ->where('c_alt_name_type_code', $typeCode)
+    ->update(['c_notes' => $notes]);
+```
+
+<Info>
+**Composite Key Tables**: `ALTNAME_DATA`, `POSTED_TO_ADDR_DATA`, `ASSOC_DATA`, `KIN_DATA`, `ENTRY_DATA`
+
+These tables require Query Builder operations as Laravel Eloquent doesn't officially support composite primary keys.
+</Info>
+
+## Frontend Architecture
+
+### Build System
+
+The frontend uses **Vite** as the modern build tool:
+
+```javascript vite.config.js
+import { defineConfig } from 'vite';
+import laravel from 'laravel-vite-plugin';
+import vue from '@vitejs/plugin-vue';
+
+export default defineConfig({
+    plugins: [
+        laravel({
+            input: [
+                'resources/js/app.js',
+                'resources/js/datatables.js',
+            ],
+            refresh: true,
+        }),
+        vue(),
+    ],
+});
+```
+
+### Entry Points
+
+<AccordionGroup>
+  <Accordion title="resources/js/app.js - Main UI Components">
+    ```javascript
+    import './bootstrap';
+    import './jquery-global'; // Expose jQuery to window
+    import 'admin-lte';
+    import 'bootstrap';
+    import { createApp } from 'vue';
+    
+    // Register Vue components
+    const app = createApp({});
+    app.component('search-component', SearchComponent);
+    app.mount('#app');
+    ```
+  </Accordion>
+  
+  <Accordion title="resources/js/datatables.js - DataTables Integration">
+    ```javascript
+    import 'datatables.net-bs4';
+    import 'datatables.net-bs4/css/dataTables.bootstrap4.css';
+    
+    // Initialize DataTables with Bootstrap 4 theme
+    $.fn.dataTable.ext.classes.sPageButton = 'btn btn-sm';
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Layout Structure
+
+All pages use the unified dashboard layout:
+
+```blade resources/views/layouts/dashboard-v3.blade.php
+<!DOCTYPE html>
+<html>
+<head>
+    @vite(['resources/js/app.js'])
+</head>
+<body class="hold-transition sidebar-mini">
+    <div class="wrapper">
+        @include('partials.header')
+        @include('partials.sidebar')
+        
+        <div class="content-wrapper">
+            @yield('content')
+        </div>
+        
+        @include('partials.footer')
+    </div>
+</body>
+</html>
+```
+
+<Warning>
+**Important**: Do NOT import jQuery, Bootstrap, or DataTables from external CDNs. All dependencies are bundled via Vite and loaded through `@vite` directives.
+</Warning>
+
+## Database Architecture
+
+### Connection Strategy
+
+The system supports multiple database environments:
+
+```php config/database.php
+'connections' => [
+    'mysql' => [
+        'driver' => 'mysql',
+        'host' => env('DB_HOST', '127.0.0.1'),
+        'database' => env('DB_DATABASE', 'cbdb'),
+        'username' => env('DB_USERNAME', 'cbdb'),
+        'password' => env('DB_PASSWORD', ''),
+        'charset' => 'utf8mb4',
+        'collation' => 'utf8mb4_general_ci',
+    ],
+    
+    'sqlite' => [
+        'driver' => 'sqlite',
+        'database' => env('DB_DATABASE', ':memory:'),
+        'foreign_key_constraints' => true,
+    ],
+],
+```
+
+### Schema Management
+
+Database schema is managed through Laravel migrations:
+
+- **Baseline migration**: `2025_01_01_000000_import_cbdb_schema.php` imports the complete CBDB schema
+- **Incremental migrations**: All schema changes are tracked in separate migration files
+- **Compatibility**: All migrations must work on both MySQL/MariaDB and SQLite
+
+See [Database Schema](/development/database-schema) for detailed schema documentation.
+
+## Routing Architecture
+
+### Web Routes
+
+The application uses Laravel's routing system:
+
+```php routes/web.php
+Route::middleware(['auth'])->group(function () {
+    // Person management
+    Route::resource('basicinformation', BasicInformationController::class);
+    Route::resource('basicinformation.offices', BasicInformationOfficesController::class);
+    
+    // Code tables
+    Route::get('/codes/{table}', [CodesController::class, 'index']);
+    
+    // Operations log
+    Route::resource('operations', OperationsController::class);
+    Route::post('operations/{id}/restore', [OperationsController::class, 'restore']);
+});
+```
+
+### API Routes
+
+```php routes/api.php
+Route::prefix('v1')->group(function () {
+    Route::get('/persons/{id}', [Api\ApiController::class, 'getPerson']);
+    Route::get('/persons/{id}/names', [Api\NameController::class, 'getNames']);
+    Route::post('/mutations', [Api\MutationController::class, 'store']);
+});
+```
+
+## Authorization
+
+The system implements role-based access control:
+
+```php
+// In controllers
+public function restore(Operation $operation) {
+    // Only active admins can restore
+    if (!auth()->user()->is_admin || !auth()->user()->is_active) {
+        abort(403, 'Unauthorized');
+    }
+    
+    // Restore operation
+    $this->operationRepository->restore($operation);
+}
+```
+
+### User Roles
+
+- **Regular User**: Basic data entry
+- **Expert**: Advanced data management
+- **Crowdsourcing**: Limited public contributions
+- **Admin**: Full system access including operations restore
+
+## Caching Strategy
+
+Laravel's caching system is used for performance optimization:
+
+```php
+// Cache configuration codes
+Cache::remember('codes.altname', 3600, function () {
+    return DB::table('ALTNAME_CODES')->get();
+});
+
+// Clear cache on update
+Cache::forget('codes.altname');
+```
+
+## Queue System
+
+For long-running operations:
+
+```php
+use Illuminate\Bus\Queueable;
+
+class ExportBiographiesJob implements ShouldQueue {
+    use Queueable;
+    
+    public function handle() {
+        // Export large dataset
+    }
+}
+
+// Dispatch job
+ExportBiographiesJob::dispatch($userId);
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Schema" icon="database" href="/development/database-schema">
+    Learn about the database structure and relationships
+  </Card>
+  
+  <Card title="Testing Guide" icon="flask" href="/development/testing">
+    Write tests for your features
+  </Card>
+  
+  <Card title="Deployment" icon="rocket" href="/development/deployment">
+    Deploy the application to production
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Explore the public API
+  </Card>
+</CardGroup>

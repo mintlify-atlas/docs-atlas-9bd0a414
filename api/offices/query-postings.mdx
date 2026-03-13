@@ -1,0 +1,443 @@
+---
+title: 'Query Office Postings'
+api: 'POST /api/query_office_postings'
+description: 'Query office posting records with complex filtering by office, location, date, and coordinates'
+---
+
+Query office posting records (除授記錄) with advanced filtering options including office types, related locations (office and people), time periods, and geographic coordinates.
+
+## Base URL
+
+All API requests should be made to: `https://input.cbdb.fas.harvard.edu`
+
+## Request Parameters
+
+<Note>This endpoint uses **POST** method with `Content-Type: application/json`</Note>
+
+<ParamField body="office" type="array" required>
+  Array of office IDs to query
+</ParamField>
+
+<ParamField body="useOfficePlace" type="number">
+  Enable office location filtering:
+  - `1` = Enable (use `officePlace` parameter)
+  - `0` = Disable (ignore `officePlace`)
+</ParamField>
+
+<ParamField body="officePlace" type="array">
+  Array of location IDs related to offices. Only used when `useOfficePlace=1`
+</ParamField>
+
+<ParamField body="usePeoplePlace" type="number">
+  Enable people location filtering:
+  - `1` = Enable (use `peoplePlace` parameter)
+  - `0` = Disable (ignore `peoplePlace`)
+</ParamField>
+
+<ParamField body="peoplePlace" type="array">
+  Array of location IDs related to people. Only used when `usePeoplePlace=1`
+</ParamField>
+
+<ParamField body="useDate" type="number">
+  Enable date filtering:
+  - `1` = Enable (use date-related parameters)
+  - `0` = Disable (ignore all date parameters)
+</ParamField>
+
+<ParamField body="dateType" type="string">
+  Date type for filtering:
+  - `"index"` = Use index year (指數年)
+  - `"dynasty"` = Use dynasty (朝代)
+</ParamField>
+
+<ParamField body="indexStartTime" type="number">
+  Start year for index year range. Used when `dateType="index"`
+</ParamField>
+
+<ParamField body="indexEndTime" type="number">
+  End year for index year range. Used when `dateType="index"`
+</ParamField>
+
+<ParamField body="dynStart" type="number">
+  Starting dynasty code. Used when `dateType="dynasty"`
+</ParamField>
+
+<ParamField body="dynEnd" type="number">
+  Ending dynasty code. Used when `dateType="dynasty"`
+</ParamField>
+
+<ParamField body="useXy" type="number">
+  Include coordinate data in response:
+  - `1` = Include coordinates
+  - `0` = Exclude coordinates
+</ParamField>
+
+<ParamField body="start" type="number">
+  Starting record index (0-based)
+</ParamField>
+
+<ParamField body="list" type="number">
+  Maximum number of records to return
+</ParamField>
+
+## Important Notes
+
+<Warning>
+  The `use*` parameters (`useOfficePlace`, `usePeoplePlace`, `useDate`) have higher priority than their corresponding data parameters. If a `use*` parameter is set to `0`, the related parameters will be ignored regardless of their values.
+</Warning>
+
+<Info>
+  When using dynasty filtering (`dateType="dynasty"`), the results will include all records from dynasties within and including `dynStart` and `dynEnd`.
+</Info>
+
+## Response Structure
+
+<ResponseField name="total" type="number">
+  Total number of matching records
+</ResponseField>
+
+<ResponseField name="start" type="number">
+  Starting record index of current response
+</ResponseField>
+
+<ResponseField name="end" type="number">
+  Ending record index of current response
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of office posting records
+
+  <ResponseField name="PersonID" type="number">
+    Person ID
+  </ResponseField>
+
+  <ResponseField name="Name" type="string">
+    Person name in English
+  </ResponseField>
+
+  <ResponseField name="NameChn" type="string">
+    Person name in Chinese
+  </ResponseField>
+
+  <ResponseField name="Sex" type="string">
+    Person's gender
+  </ResponseField>
+
+  <ResponseField name="IndexYear" type="number">
+    Person's index year
+  </ResponseField>
+
+  <ResponseField name="AddrID" type="number">
+    Person location ID
+  </ResponseField>
+
+  <ResponseField name="AddrType" type="string">
+    Address type in English
+  </ResponseField>
+
+  <ResponseField name="AddrTypeChn" type="string">
+    Address type in Chinese
+  </ResponseField>
+
+  <ResponseField name="AddrName" type="string">
+    Person location name in English
+  </ResponseField>
+
+  <ResponseField name="AddrChn" type="string">
+    Person location name in Chinese
+  </ResponseField>
+
+  <ResponseField name="X" type="number">
+    Longitude of person location
+  </ResponseField>
+
+  <ResponseField name="Y" type="number">
+    Latitude of person location
+  </ResponseField>
+
+  <ResponseField name="OfficeCode" type="number">
+    Office ID
+  </ResponseField>
+
+  <ResponseField name="OfficeName" type="string">
+    Office name in English
+  </ResponseField>
+
+  <ResponseField name="OfficeNameChn" type="string">
+    Office name in Chinese
+  </ResponseField>
+
+  <ResponseField name="FirstYear" type="number">
+    Start year of office tenure
+  </ResponseField>
+
+  <ResponseField name="LastYear" type="number">
+    End year of office tenure
+  </ResponseField>
+
+  <ResponseField name="Dynasty" type="string">
+    Dynasty
+  </ResponseField>
+
+  <ResponseField name="OfficeAddrID" type="number">
+    Office location ID
+  </ResponseField>
+
+  <ResponseField name="OfficeAddrName" type="string">
+    Office location name in English
+  </ResponseField>
+
+  <ResponseField name="OfficeAddrChn" type="string">
+    Office location name in Chinese
+  </ResponseField>
+
+  <ResponseField name="OfficeX" type="number">
+    Longitude of office location
+  </ResponseField>
+
+  <ResponseField name="OfficeY" type="number">
+    Latitude of office location
+  </ResponseField>
+
+  <ResponseField name="office_xy_count" type="number">
+    Number of office addresses
+  </ResponseField>
+
+  <ResponseField name="PostingID" type="number">
+    Posting record ID
+  </ResponseField>
+
+  <ResponseField name="ApptType" type="string">
+    Appointment type in English
+  </ResponseField>
+
+  <ResponseField name="ApptTypeChn" type="string">
+    Appointment type in Chinese
+  </ResponseField>
+
+  <ResponseField name="AssumedOffice" type="string">
+    Office assumption status in English
+  </ResponseField>
+
+  <ResponseField name="AssumedOfficeChn" type="string">
+    Office assumption status in Chinese
+  </ResponseField>
+
+  <ResponseField name="Notes" type="string">
+    Additional notes
+  </ResponseField>
+</ResponseField>
+
+## Examples
+
+### Query with people location and index year filtering
+
+<CodeGroup>
+
+```bash curl
+curl -X POST "https://input.cbdb.fas.harvard.edu/api/query_office_postings" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "office": [920, 1022, 1023],
+    "useOfficePlace": 0,
+    "officePlace": [],
+    "usePeoplePlace": 1,
+    "peoplePlace": [2928, 10522, 12553, 13947, 13949],
+    "useDate": 1,
+    "dateType": "index",
+    "indexStartTime": 960,
+    "indexEndTime": 1250,
+    "dynStart": null,
+    "dynEnd": null,
+    "useXy": 1,
+    "start": 11,
+    "list": 10
+  }'
+```
+
+```javascript JavaScript
+fetch('https://input.cbdb.fas.harvard.edu/api/query_office_postings', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    office: [920, 1022, 1023],
+    useOfficePlace: 0,
+    officePlace: [],
+    usePeoplePlace: 1,
+    peoplePlace: [2928, 10522, 12553, 13947, 13949],
+    useDate: 1,
+    dateType: 'index',
+    indexStartTime: 960,
+    indexEndTime: 1250,
+    dynStart: null,
+    dynEnd: null,
+    useXy: 1,
+    start: 11,
+    list: 10
+  })
+})
+.then(response => response.json())
+.then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://input.cbdb.fas.harvard.edu/api/query_office_postings',
+    json={
+        'office': [920, 1022, 1023],
+        'useOfficePlace': 0,
+        'officePlace': [],
+        'usePeoplePlace': 1,
+        'peoplePlace': [2928, 10522, 12553, 13947, 13949],
+        'useDate': 1,
+        'dateType': 'index',
+        'indexStartTime': 960,
+        'indexEndTime': 1250,
+        'dynStart': None,
+        'dynEnd': None,
+        'useXy': 1,
+        'start': 11,
+        'list': 10
+    }
+)
+data = response.json()
+```
+
+</CodeGroup>
+
+This query finds all posting records for people who served as Prime Minister (宰相), Left Prime Minister (左丞相), or Right Prime Minister (右丞相) during the Song Dynasty, with people locations in specific areas and index years between 960 and 1250. Returns records 11-20.
+
+### Query only by office (ignoring locations)
+
+<CodeGroup>
+
+```bash curl
+curl -X POST "https://input.cbdb.fas.harvard.edu/api/query_office_postings" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "office": [950],
+    "useOfficePlace": 0,
+    "officePlace": [],
+    "usePeoplePlace": 0,
+    "peoplePlace": [],
+    "useDate": 0,
+    "dateType": "index",
+    "indexStartTime": 960,
+    "indexEndTime": 1250,
+    "dynStart": null,
+    "dynEnd": null,
+    "useXy": 0,
+    "start": 0,
+    "list": 65535
+  }'
+```
+
+```javascript JavaScript
+fetch('https://input.cbdb.fas.harvard.edu/api/query_office_postings', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    office: [950],
+    useOfficePlace: 0,
+    officePlace: [],
+    usePeoplePlace: 0,
+    peoplePlace: [],
+    useDate: 0,
+    dateType: 'index',
+    indexStartTime: 960,
+    indexEndTime: 1250,
+    dynStart: null,
+    dynEnd: null,
+    useXy: 0,
+    start: 0,
+    list: 65535
+  })
+})
+.then(response => response.json())
+.then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://input.cbdb.fas.harvard.edu/api/query_office_postings',
+    json={
+        'office': [950],
+        'useOfficePlace': 0,
+        'officePlace': [],
+        'usePeoplePlace': 0,
+        'peoplePlace': [],
+        'useDate': 0,
+        'dateType': 'index',
+        'indexStartTime': 960,
+        'indexEndTime': 1250,
+        'dynStart': None,
+        'dynEnd': None,
+        'useXy': 0,
+        'start': 0,
+        'list': 65535
+    }
+)
+data = response.json()
+```
+
+</CodeGroup>
+
+This query retrieves all governors (知州, office_id=950) from all regions during the Song Dynasty, ignoring location and date filters.
+
+## Response Example
+
+```json
+{
+  "total": 100,
+  "start": 11,
+  "end": 20,
+  "data": [
+    {
+      "PersonID": 332,
+      "Name": "Zhang Yong",
+      "NameChn": "張詠",
+      "Sex": "M",
+      "IndexYear": 1005,
+      "AddrID": 11273,
+      "AddrType": "Basic Affiliation",
+      "AddrTypeChn": "籍貫（基本地址）",
+      "AddrName": "Juancheng",
+      "AddrChn": "鄄城",
+      "X": 115.5583,
+      "Y": 35.61019,
+      "OfficeCode": 2383,
+      "OfficeName": "Left Assistant Director of the Department of Affairs(Hucker)",
+      "OfficeNameChn": "尚書省左丞",
+      "FirstYear": 1010,
+      "LastYear": 0,
+      "Dynasty": "未詳",
+      "OfficeAddrID": 0,
+      "OfficeAddrName": "[Unknown]",
+      "OfficeAddrChn": "[未詳]",
+      "OfficeX": "",
+      "OfficeY": "",
+      "office_xy_count": " 6",
+      "PostingID": 63598,
+      "ApptType": "",
+      "ApptTypeChn": "",
+      "AssumedOffice": "",
+      "AssumedOfficeChn": "",
+      "Notes": "LZL MasterFileLineID12259"
+    }
+  ]
+}
+```
+
+## Additional Notes
+
+<Info>
+  To query all postings in a region without filtering by office, use the "Query by Region" API instead. The office posting query requires at least one office ID in the `office` array.
+</Info>

@@ -1,0 +1,399 @@
+---
+title: "Data Export & Synchronization"
+description: "Automated SQLite export and synchronization to HuggingFace datasets for public research access"
+---
+
+## Overview
+
+CBDB Online provides automated data export functionality, converting the production MariaDB database to SQLite format and synchronizing it to public datasets on HuggingFace. This enables researchers worldwide to access and analyze CBDB data offline.
+
+## Download Access
+
+The latest CBDB SQLite export is available through multiple channels:
+
+<CardGroup cols={2}>
+  <Card title="HuggingFace Dataset" icon="database" href="https://huggingface.co/datasets/cbdb/cbdb-sqlite">
+    Official HuggingFace repository with version history
+  </Card>
+  <Card title="Direct Download" icon="download" href="https://input.cbdb.fas.harvard.edu/latest.zip">
+    Latest export via CBDB Online server
+  </Card>
+  <Card title="HuggingFace Latest" icon="link" href="https://huggingface.co/datasets/cbdb/cbdb-sqlite/resolve/main/latest.zip">
+    Latest via HuggingFace CDN
+  </Card>
+  <Card title="Archive Access" icon="box-archive">
+    Historical exports organized by month in HuggingFace repository
+  </Card>
+</CardGroup>
+
+## Export Contents
+
+Each export package contains:
+
+- **SQLite Database**: `cbdb_YYYYMMDD.sqlite3` - Complete database with all tables
+- **Metadata**: `cbdb_YYYYMMDD.json` - Export information and statistics
+- **Compressed Archive**: `cbdb_YYYYMMDD.zip` - Both files compressed for download
+
+### Metadata Structure
+
+```json
+{
+  "export_date": "2025-03-13",
+  "export_timestamp": "2025-03-13T03:00:00+08:00",
+  "database_version": "MariaDB 10.3.39",
+  "total_tables": 245,
+  "total_records": {
+    "BIOG_MAIN": 549856,
+    "ALTNAME_DATA": 328471,
+    "BIOG_ADDR_DATA": 612394,
+    "POSTING_DATA": 445213
+  },
+  "export_method": "weekly-sqlite-sync.sh",
+  "file_size_bytes": 1567890432
+}
+```
+
+## Automated Export System
+
+### Weekly Synchronization
+
+The export system runs automatically every Sunday at 3:00 AM (GMT+8):
+
+<Steps>
+  <Step title="Database Export">
+    Exports all tables from MariaDB to SQLite format using `export-daily-sqlite.sh`
+  </Step>
+  
+  <Step title="Metadata Generation">
+    Creates JSON metadata file with export statistics and timestamp
+  </Step>
+  
+  <Step title="Compression">
+    Compresses SQLite database and metadata into a single ZIP archive
+  </Step>
+  
+  <Step title="Upload to HuggingFace">
+    Uploads to three locations:
+    - `history/cbdb_YYYYMM/cbdb_YYYYMMDD.zip` (monthly archive)
+    - `latest.zip` (always points to newest export)
+    - `metadata/YYYY-MM/YYYY-MM-DD.json` and `latest.json`
+  </Step>
+  
+  <Step title="Cleanup">
+    Removes local temporary files after successful upload
+  </Step>
+</Steps>
+
+### Cron Configuration
+
+The export is scheduled via cron:
+
+```bash cron
+# Weekly SQLite export and sync (Sunday 3:00 AM GMT+8)
+0 3 * * 0 /path/to/cbdb-online-main-server/scripts/weekly-sqlite-sync.sh >> /var/log/cbdb-sqlite-sync.log 2>&1
+```
+
+## Export Scripts
+
+### Export Script: export-daily-sqlite.sh
+
+The core export script converts MariaDB to SQLite:
+
+```bash export-daily-sqlite.sh
+#!/bin/bash
+
+# Load environment variables
+source .env
+
+# Export timestamp
+EXPORT_DATE=$(date +%Y%m%d)
+OUTPUT_FILE="storage/cbdb_${EXPORT_DATE}.sqlite3"
+METADATA_FILE="storage/cbdb_${EXPORT_DATE}.json"
+
+# Export all tables
+for TABLE in $(mysql -u $DB_USERNAME -p$DB_PASSWORD -D $DB_DATABASE -e 'SHOW TABLES' -s); do
+    echo "Exporting $TABLE..."
+    
+    # Export table structure
+    mysql2sqlite $DB_DATABASE $TABLE | sqlite3 $OUTPUT_FILE
+    
+    # Export table data
+    mysqldump -u $DB_USERNAME -p$DB_PASSWORD \
+        --skip-add-locks --skip-extended-insert \
+        --compatible=ansi --skip-triggers \
+        $DB_DATABASE $TABLE | mysql2sqlite | sqlite3 $OUTPUT_FILE
+done
+
+# Generate metadata
+cat > $METADATA_FILE <<EOF
+{
+  "export_date": "$(date +%Y-%m-%d)",
+  "export_timestamp": "$(date -Iseconds)",
+  "database_version": "MariaDB 10.3.39",
+  "total_tables": $(sqlite3 $OUTPUT_FILE "SELECT COUNT(*) FROM sqlite_master WHERE type='table';")
+}
+EOF
+
+echo "Export complete: $OUTPUT_FILE"
+```
+
+### Sync Script: weekly-sqlite-sync.sh
+
+Handles compression and upload to HuggingFace:
+
+```bash weekly-sqlite-sync.sh lines
+#!/bin/bash
+
+set -e  # Exit on error
+
+# Check prerequisites
+command -v zip >/dev/null 2>&1 || { echo "zip not installed"; exit 1; }
+command -v hf >/dev/null 2>&1 || { echo "huggingface-cli not installed"; exit 1; }
+
+# Check HuggingFace authentication
+hf auth status || { echo "HuggingFace auth required"; exit 1; }
+
+# Export database
+echo "Starting database export..."
+bash scripts/export-daily-sqlite.sh
+
+EXPORT_DATE=$(date +%Y%m%d)
+EXPORT_MONTH=$(date +%Y%m)
+SOURCE_DB="storage/cbdb_${EXPORT_DATE}.sqlite3"
+SOURCE_JSON="storage/cbdb_${EXPORT_DATE}.json"
+ZIP_FILE="storage/cbdb_${EXPORT_DATE}.zip"
+
+# Create ZIP archive (flat structure, no directory paths)
+echo "Compressing files..."
+cd storage
+zip -j "cbdb_${EXPORT_DATE}.zip" \
+    "cbdb_${EXPORT_DATE}.sqlite3" \
+    "cbdb_${EXPORT_DATE}.json"
+cd ..
+
+# Upload to HuggingFace
+echo "Uploading to HuggingFace..."
+
+# Upload monthly archive
+hf upload cbdb/cbdb-sqlite \
+    "$ZIP_FILE" \
+    "history/cbdb_${EXPORT_MONTH}/cbdb_${EXPORT_DATE}.zip" \
+    --repo-type dataset
+
+# Upload as latest
+hf upload cbdb/cbdb-sqlite \
+    "$ZIP_FILE" \
+    "latest.zip" \
+    --repo-type dataset
+
+# Upload metadata
+hf upload cbdb/cbdb-sqlite \
+    "$SOURCE_JSON" \
+    "metadata/$(date +%Y-%m)/$(date +%Y-%m-%d).json" \
+    --repo-type dataset
+
+hf upload cbdb/cbdb-sqlite \
+    "$SOURCE_JSON" \
+    "latest.json" \
+    --repo-type dataset
+
+# Cleanup
+echo "Cleaning up temporary files..."
+rm -f "$SOURCE_DB" "$SOURCE_JSON" "$ZIP_FILE"
+
+echo "Weekly sync completed successfully!"
+```
+
+## HuggingFace Configuration
+
+### Authentication Setup
+
+Two authentication methods are supported:
+
+<Tabs>
+  <Tab title="hf auth login (Recommended)">
+    ```bash
+    # Login interactively
+    hf auth login
+    
+    # Verify authentication
+    hf auth status
+    ```
+    
+    Token is securely stored in `~/.cache/huggingface/`
+  </Tab>
+  
+  <Tab title="Environment Variable">
+    ```bash .env
+    # Set HF_TOKEN environment variable
+    export HF_TOKEN=hf_your_token_here
+    ```
+    
+    Generate token at: https://huggingface.co/settings/tokens
+  </Tab>
+</Tabs>
+
+### Required Permissions
+
+The HuggingFace access token needs:
+
+- **Repository**: Write access to `cbdb/cbdb-sqlite` dataset
+- **Token Type**: Fine-grained token
+- **Permissions**: Repository → Write
+
+<Warning>
+Keep your HuggingFace token secure. Never commit it to version control or share it publicly.
+</Warning>
+
+## Installation Requirements
+
+### System Dependencies
+
+```bash Ubuntu/Debian
+# Install zip utility
+sudo apt-get install zip
+
+# Install HuggingFace CLI via pipx
+sudo apt-get install -y pipx
+pipx install huggingface-hub
+pipx ensurepath
+
+# Verify installations
+which zip
+which hf
+```
+
+### Manual Export
+
+Run export manually when needed:
+
+```bash
+# Full sync (export + upload)
+bash scripts/weekly-sqlite-sync.sh
+
+# Export only (no upload)
+bash scripts/export-daily-sqlite.sh
+```
+
+## Repository Structure
+
+The HuggingFace repository is organized as:
+
+```
+cbdb/cbdb-sqlite/
+├── latest.zip                          # Always the newest export
+├── latest.json                         # Latest metadata
+├── history/
+│   ├── cbdb_202503/
+│   │   ├── cbdb_20250307.zip
+│   │   ├── cbdb_20250314.zip
+│   │   └── cbdb_20250321.zip
+│   └── cbdb_202504/
+│       └── cbdb_20250404.zip
+└── metadata/
+    ├── 2025-03/
+    │   ├── 2025-03-07.json
+    │   ├── 2025-03-14.json
+    │   └── 2025-03-21.json
+    └── 2025-04/
+        └── 2025-04-04.json
+```
+
+## Using Exported Data
+
+### Download and Extract
+
+```bash
+# Download latest export
+wget https://input.cbdb.fas.harvard.edu/latest.zip
+
+# Extract files
+unzip latest.zip
+
+# Open SQLite database
+sqlite3 cbdb_20250313.sqlite3
+```
+
+### Query Examples
+
+```sql SQLite queries
+-- Count total biographical records
+SELECT COUNT(*) FROM BIOG_MAIN;
+
+-- Find people by dynasty
+SELECT c_personid, c_name_chn, c_index_year 
+FROM BIOG_MAIN 
+WHERE c_dy = 15  -- Song Dynasty
+LIMIT 10;
+
+-- Query office postings
+SELECT bm.c_name_chn, oc.c_office_name_chn, po.c_firstyear
+FROM BIOG_MAIN bm
+JOIN POSTING_DATA pd ON bm.c_personid = pd.c_personid
+JOIN POSTED_TO_OFFICE_DATA po ON pd.c_personid = po.c_personid AND pd.c_posting_id = po.c_posting_id
+JOIN OFFICE_CODES oc ON po.c_office_id = oc.c_office_id
+LIMIT 10;
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Export fails with authentication error">
+    **Solution**: Verify HuggingFace authentication:
+    
+    ```bash
+    hf auth status
+    # If not authenticated:
+    hf auth login
+    ```
+  </Accordion>
+  
+  <Accordion title="Upload fails with permission denied">
+    **Solution**: Check token permissions at https://huggingface.co/settings/tokens
+    
+    Ensure token has:
+    - Repository: Write access
+    - Repositories selected: `cbdb/cbdb-sqlite`
+  </Accordion>
+  
+  <Accordion title="Large file upload timeout">
+    **Solution**: The HuggingFace CLI handles large files automatically. If timeout occurs:
+    
+    ```bash
+    # Increase timeout in upload command
+    HF_HUB_TIMEOUT=600 bash scripts/weekly-sqlite-sync.sh
+    ```
+  </Accordion>
+  
+  <Accordion title="Export script not running via cron">
+    **Solution**: Check cron execution:
+    
+    ```bash
+    # Check cron logs
+    tail -f /var/log/cbdb-sqlite-sync.log
+    
+    # Verify cron syntax
+    crontab -l
+    
+    # Test script manually
+    bash scripts/weekly-sqlite-sync.sh
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Biographical Data" icon="database" href="/features/biographical-data">
+    Understanding the data structure
+  </Card>
+  <Card title="Database Schema" icon="table" href="/development/database-schema">
+    Complete schema reference
+  </Card>
+  <Card title="Deployment" icon="server" href="/development/deployment">
+    Production deployment and automation
+  </Card>
+  <Card title="HuggingFace Dataset" icon="link" href="https://huggingface.co/datasets/cbdb/cbdb-sqlite">
+    Access the public dataset
+  </Card>
+</CardGroup>

@@ -1,0 +1,432 @@
+---
+title: 'Database Schema'
+description: 'Complete database schema reference for CBDB Online Input System'
+---
+
+## Overview
+
+The CBDB Online Input System uses a relational database schema designed to store biographical data of historical Chinese figures. The schema supports multiple database engines:
+
+- **Production**: MariaDB 10.3.39
+- **Testing**: SQLite (in-memory)
+
+## Core Tables
+
+### BIOG_MAIN
+
+The central table storing basic biographical information.
+
+<ParamField path="c_personid" type="int" required>
+  Primary key - Unique person identifier
+</ParamField>
+
+<ParamField path="c_name" type="varchar(255)">
+  Person's name in pinyin (romanized)
+</ParamField>
+
+<ParamField path="c_name_chn" type="varchar(255)">
+  Person's name in Chinese characters
+</ParamField>
+
+<ParamField path="c_index_year" type="int">
+  Index year for chronological sorting
+</ParamField>
+
+<ParamField path="c_surname" type="varchar(255)">
+  Surname in pinyin
+</ParamField>
+
+<ParamField path="c_surname_chn" type="varchar(255)">
+  Surname in Chinese characters
+</ParamField>
+
+<ParamField path="c_birthyear" type="smallint">
+  Birth year (Gregorian calendar)
+</ParamField>
+
+<ParamField path="c_deathyear" type="smallint">
+  Death year (Gregorian calendar)
+</ParamField>
+
+<ParamField path="c_female" type="smallint">
+  Gender indicator (1 = female, 0 = male)
+</ParamField>
+
+#### Example Query
+
+```sql
+SELECT 
+    c_personid,
+    c_name_chn,
+    c_index_year,
+    c_birthyear,
+    c_deathyear
+FROM BIOG_MAIN
+WHERE c_surname_chn = '李'
+ORDER BY c_index_year;
+```
+
+### ALTNAME_DATA
+
+Stores alternative names for persons (courtesy names, art names, posthumous names, etc.).
+
+**Composite Primary Key**: `(c_personid, c_alt_name_chn, c_alt_name_type_code)`
+
+<ParamField path="c_personid" type="int" required>
+  Foreign key to BIOG_MAIN
+</ParamField>
+
+<ParamField path="c_alt_name" type="varchar(255)">
+  Alternative name in pinyin
+</ParamField>
+
+<ParamField path="c_alt_name_chn" type="varchar(255)" required>
+  Alternative name in Chinese characters
+</ParamField>
+
+<ParamField path="c_alt_name_type_code" type="smallint" required>
+  Type of alternative name (foreign key to ALTNAME_CODES)
+</ParamField>
+
+<ParamField path="c_sequence" type="smallint">
+  Sequence number for ordering multiple names of the same type
+</ParamField>
+
+<Warning>
+**Composite Primary Key**: This table uses a composite primary key. Use Laravel's Query Builder (`DB::table()`) instead of Eloquent models for operations.
+</Warning>
+
+```php
+// ✅ Correct approach
+DB::table('ALTNAME_DATA')
+    ->where('c_personid', $personId)
+    ->where('c_alt_name_chn', $name)
+    ->where('c_alt_name_type_code', $typeCode)
+    ->update(['c_notes' => $notes]);
+```
+
+### POSTING_DATA
+
+Records of official postings and appointments.
+
+<ParamField path="c_personid" type="int" required>
+  Foreign key to BIOG_MAIN
+</ParamField>
+
+<ParamField path="c_posting_id" type="int" required>
+  Unique posting identifier
+</ParamField>
+
+<ParamField path="c_firstyear" type="smallint">
+  Start year of posting
+</ParamField>
+
+<ParamField path="c_lastyear" type="smallint">
+  End year of posting
+</ParamField>
+
+<ParamField path="c_office_id" type="int">
+  Foreign key to OFFICE_CODES
+</ParamField>
+
+<ParamField path="c_addr_id" type="int">
+  Foreign key to ADDR_CODES (location of posting)
+</ParamField>
+
+### POSTED_TO_ADDR_DATA
+
+Stores multiple addresses associated with a single posting.
+
+**Composite Primary Key**: `(c_personid, c_posting_id, c_office_id)`
+
+<ParamField path="c_personid" type="int" required>
+  Foreign key to BIOG_MAIN
+</ParamField>
+
+<ParamField path="c_posting_id" type="int" required>
+  Foreign key to POSTING_DATA
+</ParamField>
+
+<ParamField path="c_office_id" type="int" required>
+  Foreign key to OFFICE_CODES
+</ParamField>
+
+<ParamField path="c_addr_id" type="int">
+  Foreign key to ADDR_CODES
+</ParamField>
+
+### KIN_DATA
+
+Kinship relationships between persons.
+
+**Composite Primary Key**: `(c_personid, c_kin_code, c_kin_id)`
+
+<ParamField path="c_personid" type="int" required>
+  Primary person
+</ParamField>
+
+<ParamField path="c_kin_code" type="smallint" required>
+  Relationship type (foreign key to KINSHIP_CODES)
+</ParamField>
+
+<ParamField path="c_kin_id" type="int" required>
+  Related person (foreign key to BIOG_MAIN)
+</ParamField>
+
+### ASSOC_DATA
+
+Social associations between persons.
+
+**Composite Primary Key**: `(c_assoc_code, c_assoc_id, c_assoc_kin_code, c_assoc_kin_id, c_kin_code, c_kin_id, c_personid, c_text_title, c_assoc_first_year)`
+
+<Info>
+This table has a complex composite primary key to support many-to-many associations with additional context.
+</Info>
+
+## Internal Tables
+
+Internal tables use the `CBDB__` prefix and are for system use only.
+
+### CBDB__NAME_FTS
+
+Full-text search index for person names.
+
+<ParamField path="c_personid" type="int" required>
+  Foreign key to BIOG_MAIN
+</ParamField>
+
+<ParamField path="name" type="varchar(255)" required>
+  Indexed name (Chinese characters or pinyin)
+</ParamField>
+
+<ParamField path="source" type="varchar(50)" required>
+  Source of name (e.g., 'main_name', 'alt_name', 'surname')
+</ParamField>
+
+<ParamField path="pinyin" type="varchar(255)">
+  Pinyin representation for searching
+</ParamField>
+
+```sql
+-- Example: Search by name suffix
+SELECT DISTINCT c_personid
+FROM CBDB__NAME_FTS
+WHERE name LIKE '%東坡%'
+ORDER BY c_personid
+LIMIT 100;
+```
+
+### CBDB__TRAD_SIMP_MAP
+
+Mapping between traditional and simplified Chinese characters.
+
+<ParamField path="trad" type="varbinary(4)" required>
+  Traditional character (supports non-BMP Unicode)
+</ParamField>
+
+<ParamField path="simp" type="varbinary(4)" required>
+  Simplified character
+</ParamField>
+
+<ParamField path="is_variant" type="tinyint">
+  Flag for variant characters (1 = variant, 0 = standard)
+</ParamField>
+
+## Code Tables
+
+Code tables define controlled vocabularies and reference data.
+
+### ALTNAME_CODES
+
+Types of alternative names.
+
+```sql
+SELECT * FROM ALTNAME_CODES;
+```
+
+| c_name_type_code | c_name_type_desc | c_name_type_desc_chn |
+|------------------|------------------|----------------------|
+| 1 | Courtesy Name | 字 |
+| 2 | Studio Name | 號 |
+| 3 | Posthumous Name | 諡 |
+| 4 | Pen Name | 筆名 |
+
+### DYNASTIES
+
+Chinese dynasties reference table.
+
+<ParamField path="c_dy" type="smallint" required>
+  Dynasty code (primary key)
+</ParamField>
+
+<ParamField path="c_dynasty" type="varchar(255)">
+  Dynasty name in English
+</ParamField>
+
+<ParamField path="c_dynasty_chn" type="varchar(255)">
+  Dynasty name in Chinese
+</ParamField>
+
+<ParamField path="c_start" type="smallint">
+  Start year
+</ParamField>
+
+<ParamField path="c_end" type="smallint">
+  End year
+</ParamField>
+
+### KINSHIP_CODES
+
+Kinship relationship types.
+
+```sql
+SELECT c_kincode, c_kinrel_chn, c_kinrel 
+FROM KINSHIP_CODES 
+WHERE c_kinrel_type = 'direct'
+ORDER BY c_sortorder;
+```
+
+## Migration Approach
+
+### Baseline Schema
+
+The complete schema is imported via a baseline migration:
+
+```php database/migrations/2025_01_01_000000_import_cbdb_schema.php
+class ImportCbdbSchema extends Migration {
+    public function up(): void {
+        disable_foreign_keys();
+        
+        $statements = $this->extractCreateStatements($this->schemaSql());
+        
+        foreach ($statements as $table => $statement) {
+            if (Schema::hasTable($table)) {
+                continue; // Skip existing tables
+            }
+            
+            if (is_sqlite()) {
+                $statement = $this->sanitizeForSqlite($statement);
+            }
+            
+            DB::statement($statement);
+        }
+        
+        enable_foreign_keys();
+    }
+}
+```
+
+### Database Compatibility
+
+All migrations must support both MySQL/MariaDB and SQLite:
+
+```php
+// ✅ Correct: Use helper functions
+if (is_mysql()) {
+    DB::statement('ALTER TABLE foo ENGINE=InnoDB');
+}
+
+if (is_sqlite()) {
+    // SQLite doesn't support ENGINE clause
+}
+
+// ❌ Incorrect: Don't use DB::getDriverName()
+if (DB::getDriverName() === 'sqlite') { /* ... */ }
+```
+
+<Warning>
+**Database Compatibility Rules**:
+
+1. Use `is_mysql()` and `is_sqlite()` helper functions
+2. Prefer Laravel Schema Builder over raw SQL
+3. Remove MySQL-specific syntax (COMMENT, ENGINE, USING BTREE) for SQLite
+4. Test migrations on both databases
+</Warning>
+
+## Indexes
+
+The schema uses B-Tree indexes for optimal query performance:
+
+```sql
+-- Person lookup
+CREATE INDEX idx_personid ON BIOG_MAIN(c_personid);
+
+-- Name search
+CREATE INDEX idx_name ON CBDB__NAME_FTS(name);
+
+-- Chronological queries
+CREATE INDEX idx_index_year ON BIOG_MAIN(c_index_year);
+
+-- Foreign key relationships
+CREATE INDEX idx_personid_altname ON ALTNAME_DATA(c_personid);
+```
+
+## Querying with Tinker
+
+Use Laravel Tinker to explore the schema:
+
+```bash
+php artisan tinker
+```
+
+```php
+// Get table schema
+DB::select("PRAGMA table_info('BIOG_MAIN')"); // SQLite
+DB::select("DESCRIBE BIOG_MAIN"); // MySQL/MariaDB
+
+// Sample data
+DB::table('BIOG_MAIN')->limit(5)->get();
+
+// Check indexes
+DB::select("SHOW INDEX FROM BIOG_MAIN"); // MySQL/MariaDB
+```
+
+## Schema Maintenance
+
+### Adding New Tables
+
+Create a new migration for incremental changes:
+
+```bash
+php artisan make:migration create_new_table
+```
+
+```php
+public function up(): void {
+    Schema::create('new_table', function (Blueprint $table) {
+        $table->bigIncrements('id');
+        $table->integer('c_personid');
+        $table->string('name');
+        $table->timestamps();
+        
+        $table->foreign('c_personid')
+            ->references('c_personid')
+            ->on('BIOG_MAIN')
+            ->onDelete('cascade');
+    });
+}
+```
+
+<Note>
+**Never modify** the baseline migration (`2025_01_01_000000_import_cbdb_schema.php`). Always create new migration files for schema changes.
+</Note>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="sitemap" href="/development/architecture">
+    Understand the overall system architecture
+  </Card>
+  
+  <Card title="Migration Guide" icon="database" href="/development/testing">
+    Learn how to write database migrations
+  </Card>
+  
+  <Card title="Repository Pattern" icon="layer-group" href="/development/architecture#repository-pattern">
+    Data access abstraction patterns
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Query the database through the API
+  </Card>
+</CardGroup>

@@ -1,0 +1,168 @@
+---
+title: 'Search Offices by Name'
+api: 'GET /api/office_list_by_name'
+description: 'Search for offices by Chinese or English name with fuzzy or exact matching'
+---
+
+Search for offices by their Chinese or English names. Supports both exact matching and fuzzy (partial) matching with pagination.
+
+## Base URL
+
+All API requests should be made to: `https://input.cbdb.fas.harvard.edu`
+
+## Request Parameters
+
+<ParamField query="pName" type="string" required>
+  Office name in Chinese or English (URL-encoded)
+</ParamField>
+
+<ParamField query="start" type="number">
+  Starting record index (0-based)
+</ParamField>
+
+<ParamField query="list" type="number">
+  Maximum number of records to return
+</ParamField>
+
+<ParamField query="accurate" type="number">
+  Matching mode:
+  - `0` = Exact match (精確匹配)
+  - `1` = Fuzzy match (模糊匹配)
+</ParamField>
+
+## Response Structure
+
+<ResponseField name="total" type="number">
+  Total number of matching records
+</ResponseField>
+
+<ResponseField name="start" type="number">
+  Starting record index of current response
+</ResponseField>
+
+<ResponseField name="end" type="number">
+  Ending record index of current response
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of office records
+  
+  <ResponseField name="pId" type="string">
+    Office ID (office_id)
+  </ResponseField>
+  
+  <ResponseField name="pName" type="string">
+    Office name in English
+  </ResponseField>
+  
+  <ResponseField name="pNameChn" type="string">
+    Office name in Chinese
+  </ResponseField>
+  
+  <ResponseField name="pNameChnAlt" type="string">
+    Alternative Chinese names for the office, separated by semicolons. Corresponds to `[OFFICE_CODES].[c_office_chn_alt]`
+  </ResponseField>
+</ResponseField>
+
+## Examples
+
+### Fuzzy search for offices containing "尚書省工部"
+
+<CodeGroup>
+
+```bash curl
+curl "https://input.cbdb.fas.harvard.edu/api/office_list_by_name?pName=%E5%B0%9A%E6%9B%B8%E7%9C%81%E5%B7%A5%E9%83%A8&start=1&list=2&accurate=0"
+```
+
+```javascript JavaScript
+const encodedName = encodeURIComponent('尚書省工部');
+fetch(`https://input.cbdb.fas.harvard.edu/api/office_list_by_name?pName=${encodedName}&start=1&list=2&accurate=0`)
+  .then(response => response.json())
+  .then(data => console.log(data));
+```
+
+```python Python
+import requests
+from urllib.parse import quote
+
+name = '尚書省工部'
+response = requests.get(
+    'https://input.cbdb.fas.harvard.edu/api/office_list_by_name',
+    params={
+        'pName': name,
+        'start': 1,
+        'list': 2,
+        'accurate': 0
+    }
+)
+data = response.json()
+```
+
+</CodeGroup>
+
+This searches for all offices containing "尚書省工部" in their name, starting from record 1, returning up to 2 results.
+
+### Exact match for "尚書省工部侍郎"
+
+<CodeGroup>
+
+```bash curl
+curl "https://input.cbdb.fas.harvard.edu/api/office_list_by_name?pName=%E5%B0%9A%E6%9B%B8%E7%9C%81%E5%B7%A5%E9%83%A8%E4%BE%8D%E9%83%8E&start=1&list=2&accurate=1"
+```
+
+```javascript JavaScript
+const encodedName = encodeURIComponent('尚書省工部侍郎');
+fetch(`https://input.cbdb.fas.harvard.edu/api/office_list_by_name?pName=${encodedName}&start=1&list=2&accurate=1`)
+  .then(response => response.json())
+  .then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+name = '尚書省工部侍郎'
+response = requests.get(
+    'https://input.cbdb.fas.harvard.edu/api/office_list_by_name',
+    params={
+        'pName': name,
+        'start': 1,
+        'list': 2,
+        'accurate': 1
+    }
+)
+data = response.json()
+```
+
+</CodeGroup>
+
+This performs an exact match for offices named exactly "尚書省工部侍郎", starting from record 1, returning up to 2 results.
+
+## Response Example
+
+```json
+{
+  "total": 100,
+  "start": 1,
+  "end": 2,
+  "data": [
+    {
+      "pId": "27",
+      "pName": "shang shu sheng gong bu shang shu",
+      "pNameChn": "尚書省工部尚書",
+      "pNameChnAlt": "工部尚書;尚書;工部一書;工書;冬卿;冬卿常伯"
+    },
+    {
+      "pId": "28",
+      "pName": "shang shu sheng gong bu shi lang",
+      "pNameChn": "尚書省工部侍郎",
+      "pNameChnAlt": "工部侍郎;工侍;小司空;司平少常伯;冬官之貳;共工之貳"
+    }
+  ]
+}
+```
+
+## Notes
+
+- The `pName` parameter must be URL-encoded, especially for Chinese characters
+- Fuzzy matching (`accurate=0`) searches within office names and alternative names
+- Exact matching (`accurate=1`) requires an exact match of the office name

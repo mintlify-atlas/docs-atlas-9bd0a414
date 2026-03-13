@@ -1,0 +1,508 @@
+---
+title: 'Testing Guide'
+description: 'PHPUnit testing strategies and best practices for CBDB Online'
+---
+
+## Testing Philosophy
+
+The CBDB Online Input System uses **PHPUnit 11.x** for automated testing. Our testing strategy emphasizes:
+
+- **In-memory SQLite**: Fast, isolated test database
+- **Minimal dependencies**: Avoid relying on full schema migrations
+- **Test isolation**: Each test creates its own database state
+- **Comprehensive coverage**: Unit and feature tests
+
+## Test Environment Setup
+
+### PHPUnit Configuration
+
+The test environment is configured in `phpunit.xml`:
+
+```xml phpunit.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="vendor/autoload.php" colors="true">
+  <testsuites>
+    <testsuite name="Feature">
+      <directory suffix="Test.php">./tests/Feature</directory>
+    </testsuite>
+    <testsuite name="Unit">
+      <directory suffix="Test.php">./tests/Unit</directory>
+    </testsuite>
+  </testsuites>
+  
+  <php>
+    <env name="APP_ENV" value="testing"/>
+    <env name="DB_CONNECTION" value="sqlite"/>
+    <env name="DB_DATABASE" value=":memory:"/>
+    <env name="CACHE_DRIVER" value="array"/>
+    <env name="SESSION_DRIVER" value="array"/>
+    <env name="QUEUE_CONNECTION" value="sync"/>
+    <env name="SKIP_CSRF_TOKEN" value="true"/>
+  </php>
+</phpunit>
+```
+
+<Info>
+The `SKIP_CSRF_TOKEN=true` setting allows feature tests to make POST requests without CSRF tokens.
+</Info>
+
+## Running Tests
+
+### Execute All Tests
+
+```bash
+./vendor/bin/phpunit
+```
+
+### Run Specific Test Suite
+
+```bash
+# Feature tests only
+./vendor/bin/phpunit --testsuite=Feature
+
+# Unit tests only
+./vendor/bin/phpunit --testsuite=Unit
+```
+
+### Run Single Test File
+
+```bash
+./vendor/bin/phpunit tests/Feature/CodesControllerTest.php
+```
+
+### Run Specific Test Method
+
+```bash
+./vendor/bin/phpunit --filter testUserCanViewCodesPage
+```
+
+## Test Structure
+
+### Feature Tests
+
+Feature tests verify complete user workflows through HTTP requests.
+
+```php tests/Feature/CodesControllerTest.php
+namespace Tests\Feature;
+
+use Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Models\User;
+use Illuminate\Support\Facades\Schema;
+
+class CodesControllerTest extends TestCase {
+    protected function setUp(): void {
+        parent::setUp();
+        
+        // Configure in-memory SQLite
+        config()->set('database.default', 'sqlite');
+        config()->set('database.connections.sqlite.database', ':memory:');
+        
+        // Create minimal schema
+        Schema::create('users', function ($table) {
+            $table->bigIncrements('id');
+            $table->string('name');
+            $table->string('email')->unique();
+            $table->string('password');
+            $table->string('confirmation_token')->nullable();
+            $table->tinyInteger('is_active')->default(1);
+            $table->tinyInteger('is_admin')->default(0);
+            $table->timestamps();
+        });
+        
+        Schema::create('ALTNAME_CODES', function ($table) {
+            $table->smallInteger('c_name_type_code')->primary();
+            $table->string('c_name_type_desc')->nullable();
+            $table->string('c_name_type_desc_chn')->nullable();
+        });
+    }
+    
+    public function testUserCanViewCodesPage(): void {
+        // Arrange: Create authenticated user
+        $user = User::create([
+            'name' => 'Test User',
+            'email' => 'test@example.com',
+            'password' => bcrypt('password'),
+            'confirmation_token' => 'confirmed',
+            'is_active' => 1,
+        ]);
+        
+        // Insert test data
+        DB::table('ALTNAME_CODES')->insert([
+            'c_name_type_code' => 1,
+            'c_name_type_desc' => 'Courtesy Name',
+            'c_name_type_desc_chn' => '字',
+        ]);
+        
+        // Act: Make authenticated request
+        $response = $this->actingAs($user)
+            ->get('/codes/ALTNAME_CODES');
+        
+        // Assert: Verify response
+        $response->assertStatus(200);
+        $response->assertSee('Courtesy Name');
+        $response->assertSee('字');
+    }
+    
+    public function testUnauthenticatedUserCannotAccessCodes(): void {
+        $response = $this->get('/codes/ALTNAME_CODES');
+        $response->assertRedirect('/login');
+    }
+}
+```
+
+### Unit Tests
+
+Unit tests verify individual class methods in isolation.
+
+```php tests/Unit/NameSearchIndexServiceTest.php
+namespace Tests\Unit;
+
+use PHPUnit\Framework\TestCase;
+use App\Services\NameSearchIndexService;
+use Mockery;
+
+class NameSearchIndexServiceTest extends TestCase {
+    public function testExtractSearchableTokens(): void {
+        $service = new NameSearchIndexService();
+        
+        $tokens = $service->extractSearchableTokens('蘇東坡');
+        
+        $this->assertContains('蘇東坡', $tokens); // Full name
+        $this->assertContains('東坡', $tokens);   // Suffix
+        $this->assertContains('坡', $tokens);     // Single char
+    }
+    
+    public function testPinyinConversion(): void {
+        $service = new NameSearchIndexService();
+        
+        $pinyin = $service->convertToPinyin('李白');
+        
+        $this->assertEquals('libai', strtolower($pinyin));
+    }
+    
+    protected function tearDown(): void {
+        Mockery::close();
+        parent::tearDown();
+    }
+}
+```
+
+## In-Memory Database Pattern
+
+<Note>
+**Recommended Pattern**: Use in-memory SQLite with minimal schema creation in `setUp()` method.
+</Note>
+
+### Basic Setup Template
+
+```php
+protected function setUp(): void {
+    parent::setUp();
+    
+    // Configure SQLite in-memory
+    config()->set('database.default', 'sqlite');
+    config()->set('database.connections.sqlite.database', ':memory:');
+    
+    // Create only tables needed for this test
+    Schema::create('users', function (Blueprint $table) {
+        $table->bigIncrements('id');
+        $table->string('name');
+        $table->string('email')->unique();
+        $table->string('password');
+        $table->string('confirmation_token')->nullable();
+        $table->timestamps();
+    });
+    
+    // Add test-specific tables
+    Schema::create('operations', function (Blueprint $table) {
+        $table->bigIncrements('id');
+        $table->string('resource_type');
+        $table->string('resource_id');
+        $table->integer('op_type');
+        $table->json('resource_data');
+        $table->timestamps();
+    });
+}
+```
+
+### Benefits of In-Memory Testing
+
+<AccordionGroup>
+  <Accordion title="Speed">
+    In-memory databases are **10-100x faster** than disk-based databases. Tests run in milliseconds instead of seconds.
+  </Accordion>
+  
+  <Accordion title="Isolation">
+    Each test gets a fresh database. No cleanup needed, no interference between tests.
+  </Accordion>
+  
+  <Accordion title="Simplicity">
+    No need to run full migrations. Create only the tables your test needs.
+  </Accordion>
+  
+  <Accordion title="CI/CD Friendly">
+    No external database service required. Works in any CI environment.
+  </Accordion>
+</AccordionGroup>
+
+## Testing Best Practices
+
+### 1. Test Authentication
+
+Always use `actingAs()` for authenticated requests:
+
+```php
+// ✅ Correct
+$user = User::create([...]);
+$response = $this->actingAs($user)->get('/dashboard');
+
+// ❌ Incorrect: Missing authentication
+$response = $this->get('/dashboard'); // Will redirect to login
+```
+
+### 2. Test Authorization
+
+Verify that unauthorized users cannot access restricted resources:
+
+```php
+public function testOnlyAdminsCanRestoreOperations(): void {
+    $admin = User::create(['is_admin' => 1, 'is_active' => 1]);
+    $regular = User::create(['is_admin' => 0, 'is_active' => 1]);
+    
+    $operation = Operation::create([...]);
+    
+    // Admin should succeed
+    $response = $this->actingAs($admin)
+        ->post("/operations/{$operation->id}/restore");
+    $response->assertStatus(200);
+    
+    // Regular user should fail
+    $response = $this->actingAs($regular)
+        ->post("/operations/{$operation->id}/restore");
+    $response->assertStatus(403);
+}
+```
+
+### 3. Test Side Effects
+
+Verify that operations produce expected side effects:
+
+```php
+public function testCreatingAltnameUpdatesSearchIndex(): void {
+    $person = BiogMain::create([...]);
+    
+    // Create altname
+    DB::table('ALTNAME_DATA')->insert([
+        'c_personid' => $person->c_personid,
+        'c_alt_name_chn' => '東坡',
+        'c_alt_name_type_code' => 1,
+    ]);
+    
+    // Trigger index update
+    $service = app(NameSearchIndexService::class);
+    $service->updatePersonIndex($person->c_personid);
+    
+    // Verify search index updated
+    $this->assertDatabaseHas('CBDB__NAME_FTS', [
+        'c_personid' => $person->c_personid,
+        'name' => '東坡',
+    ]);
+}
+```
+
+### 4. Test Edge Cases
+
+Don't just test the happy path:
+
+```php
+public function testHandlesInvalidInput(): void {
+    $user = User::create([...]);
+    
+    $response = $this->actingAs($user)
+        ->post('/basicinformation', [
+            'c_name_chn' => '', // Invalid: empty name
+        ]);
+    
+    $response->assertSessionHasErrors('c_name_chn');
+}
+
+public function testHandlesDuplicateKeys(): void {
+    // Insert first record
+    DB::table('ALTNAME_DATA')->insert([...]);
+    
+    // Attempt duplicate
+    $this->expectException(QueryException::class);
+    DB::table('ALTNAME_DATA')->insert([...]);
+}
+```
+
+## Testing Composite Key Tables
+
+For tables with composite primary keys, test using Query Builder:
+
+```php
+public function testUpdateAltnameWithCompositeKey(): void {
+    // Insert record
+    DB::table('ALTNAME_DATA')->insert([
+        'c_personid' => 1,
+        'c_alt_name_chn' => '東坡',
+        'c_alt_name_type_code' => 1,
+        'c_sequence' => 0,
+    ]);
+    
+    // Update using composite key
+    $affected = DB::table('ALTNAME_DATA')
+        ->where('c_personid', 1)
+        ->where('c_alt_name_chn', '東坡')
+        ->where('c_alt_name_type_code', 1)
+        ->update(['c_sequence' => 1]);
+    
+    $this->assertEquals(1, $affected);
+    
+    // Verify update
+    $record = DB::table('ALTNAME_DATA')
+        ->where('c_personid', 1)
+        ->where('c_alt_name_chn', '東坡')
+        ->where('c_alt_name_type_code', 1)
+        ->first();
+    
+    $this->assertEquals(1, $record->c_sequence);
+}
+```
+
+## Mocking and Factories
+
+### User Factory
+
+Create test users easily:
+
+```php database/factories/UserFactory.php
+class UserFactory extends Factory {
+    public function definition(): array {
+        return [
+            'name' => $this->faker->name(),
+            'email' => $this->faker->unique()->safeEmail(),
+            'password' => bcrypt('password'),
+            'confirmation_token' => 'confirmed',
+            'is_active' => 1,
+            'is_admin' => 0,
+        ];
+    }
+    
+    public function admin(): static {
+        return $this->state(fn ($attributes) => [
+            'is_admin' => 1,
+        ]);
+    }
+}
+
+// Usage in tests
+$user = User::factory()->create();
+$admin = User::factory()->admin()->create();
+```
+
+### Mocking External Services
+
+```php
+use Mockery;
+
+public function testUsesExternalService(): void {
+    // Mock external service
+    $mock = Mockery::mock(ExternalService::class);
+    $mock->shouldReceive('fetchData')
+        ->once()
+        ->with(123)
+        ->andReturn(['result' => 'success']);
+    
+    $this->app->instance(ExternalService::class, $mock);
+    
+    // Test code that uses the service
+    $controller = new MyController();
+    $result = $controller->processData(123);
+    
+    $this->assertEquals('success', $result['result']);
+}
+```
+
+## Common Testing Pitfalls
+
+<Warning>
+**Avoid These Common Mistakes**:
+
+1. **Forgetting `confirmation_token`**: User table requires this field
+   ```php
+   // ❌ Will fail: Missing confirmation_token
+   User::create(['name' => 'Test', 'email' => 'test@test.com']);
+   
+   // ✅ Correct
+   User::create(['name' => 'Test', 'email' => 'test@test.com', 'confirmation_token' => 'confirmed']);
+   ```
+
+2. **Not clearing Mockery**: Always call `Mockery::close()` in `tearDown()`
+
+3. **Relying on full migrations**: Use minimal schema in `setUp()` instead
+
+4. **Not testing authorization**: Test both allowed and forbidden access
+</Warning>
+
+## Test Coverage
+
+Generate code coverage reports:
+
+```bash
+# Generate HTML coverage report
+./vendor/bin/phpunit --coverage-html coverage
+
+# View in browser
+open coverage/index.html
+```
+
+## Continuous Integration
+
+Example GitHub Actions workflow:
+
+```yaml .github/workflows/tests.yml
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.4'
+        extensions: sqlite3, pdo_sqlite
+    
+    - name: Install Dependencies
+      run: composer install --no-interaction --prefer-dist
+    
+    - name: Run Tests
+      run: ./vendor/bin/phpunit
+```
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="sitemap" href="/development/architecture">
+    Understand the codebase structure
+  </Card>
+  
+  <Card title="Database Schema" icon="database" href="/development/database-schema">
+    Learn about database tables
+  </Card>
+  
+  <Card title="Deployment" icon="rocket" href="/development/deployment">
+    Deploy your tested code
+  </Card>
+  
+  <Card title="PHPUnit Docs" icon="external-link" href="https://phpunit.de/">
+    Official PHPUnit documentation
+  </Card>
+</CardGroup>

@@ -1,0 +1,193 @@
+---
+title: 'API Overview'
+description: 'Introduction to the CBDB Online Input System API'
+---
+
+## Introduction
+
+The CBDB (China Biographical Database) Online Input System API provides programmatic access to biographical data of historical Chinese figures. This RESTful API allows you to query offices, entry paths, places, relationships, and social networks.
+
+## Base URL
+
+All API requests should be made to:
+
+```
+https://input.cbdb.fas.harvard.edu/api/
+```
+
+## API Categories
+
+The API is organized into five main categories:
+
+### 1. Offices & Postings
+
+Query historical Chinese governmental positions and office postings:
+
+- List offices by category code
+- Search offices by name (Chinese or English)
+- Query office postings with complex filters (time, place, person)
+
+### 2. Entry Paths
+
+Access data about career entry methods (civil service examinations, hereditary positions, etc.):
+
+- List entry paths by category code
+- Search entry paths by name
+- Query people by entry path with filters
+
+### 3. Places
+
+Search and retrieve geographical location data:
+
+- Search places by name with time period filters
+- Query hierarchical place relationships
+- Get coordinates for mapping applications
+
+### 4. Relationships
+
+Explore kinship and social associations:
+
+- Query relatives with customizable relationship depth
+- Find social associations by type
+- Search association types by category
+
+### 5. Social Networks
+
+Analyze social network connections:
+
+- Query multi-degree social networks
+- Filter by place, time, and relationship type
+- Map connections between historical figures
+
+## Response Format
+
+All API responses are returned in JSON format with a consistent structure:
+
+```json
+{
+  "total": 100,
+  "start": 1,
+  "end": 10,
+  "data": [
+    // Array of result objects
+  ]
+}
+```
+
+<ResponseField name="total" type="number">
+  Total number of records matching the query
+</ResponseField>
+
+<ResponseField name="start" type="number">
+  Starting record number (1-based index)
+</ResponseField>
+
+<ResponseField name="end" type="number">
+  Ending record number
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of result objects (structure varies by endpoint)
+</ResponseField>
+
+## Pagination
+
+Most endpoints support pagination through two query parameters:
+
+<ParamField query="start" type="number" default="0">
+  Starting record number (0-based for API, 1-based in response)
+</ParamField>
+
+<ParamField query="list" type="number">
+  Number of records to return (length of result set)
+</ParamField>
+
+### Example
+
+```bash
+# Get first 100 records
+curl "https://input.cbdb.fas.harvard.edu/api/post_list?id=06&start=0&list=100"
+
+# Get records 100-199
+curl "https://input.cbdb.fas.harvard.edu/api/post_list?id=06&start=100&list=100"
+```
+
+## HTTP Methods
+
+The API uses standard HTTP methods:
+
+- **GET**: Retrieve data (simple queries with query parameters)
+- **POST**: Complex queries (filters passed in JSON request body)
+
+## Character Encoding
+
+All API endpoints support UTF-8 encoding. Chinese characters in query parameters must be URL-encoded.
+
+### Example
+
+```bash
+# URL-encoded Chinese characters
+curl "https://input.cbdb.fas.harvard.edu/api/place_list?name=%E6%99%AE%E6%B4%B1%E9%81%93&accurate=1"
+```
+
+## Data Types
+
+Common data types used throughout the API:
+
+| Type | Description | Example |
+|------|-------------|--------|
+| `number` | Integer or decimal | `1762`, `103.831459` |
+| `string` | Text (English or Chinese) | `"Wang Anshi"`, `"王安石"` |
+| `array` | List of values | `[920, 1022, 1023]` |
+| `object` | JSON object | `{"office": [920]}` |
+
+## Rate Limits
+
+Currently, there are no enforced rate limits on API requests. However, we recommend:
+
+- Implementing client-side caching for repeated queries
+- Using pagination for large result sets
+- Avoiding rapid-fire requests that may impact server performance
+
+<Note>
+  Rate limiting may be introduced in future API versions. Developers will be notified in advance.
+</Note>
+
+## API Version
+
+The current API version is **v1** (implied). Future versions may be introduced with explicit version prefixes in the URL path.
+
+## Error Handling
+
+When errors occur, the API returns appropriate HTTP status codes:
+
+- **200 OK**: Request successful
+- **400 Bad Request**: Invalid parameters
+- **404 Not Found**: Endpoint or resource not found
+- **500 Internal Server Error**: Server-side error
+
+Error responses include details when available:
+
+```json
+{
+  "error": "Invalid parameter value",
+  "message": "The 'accurate' parameter must be 0 or 1"
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/api/authentication">
+    Learn about authentication and API access
+  </Card>
+  <Card title="Offices & Postings" icon="building" href="/api/offices/list-by-category">
+    Query historical governmental positions
+  </Card>
+  <Card title="Entry Paths" icon="door-open" href="/api/entries/list-by-category">
+    Access career entry methods data
+  </Card>
+  <Card title="Places" icon="map-location-dot" href="/api/places/search">
+    Search geographical locations
+  </Card>
+</CardGroup>

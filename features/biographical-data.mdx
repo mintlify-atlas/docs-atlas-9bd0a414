@@ -1,0 +1,313 @@
+---
+title: "Biographical Data Management"
+description: "Comprehensive system for managing biographical data of historical Chinese figures including names, addresses, offices, relationships, and associations"
+---
+
+## Overview
+
+CBDB Online provides a comprehensive data entry system for managing biographical information of historical Chinese figures. The system supports multiple data types organized around the core `BIOG_MAIN` table, with related tables for names, addresses, offices, kinship relationships, and social associations.
+
+## Core Data Structure
+
+<CardGroup cols={2}>
+  <Card title="Basic Information" icon="user">
+    Core biographical data including names, index year, dynasty, and gender
+  </Card>
+  <Card title="Names" icon="signature">
+    Alternate names, style names, and posthumous names
+  </Card>
+  <Card title="Addresses" icon="location-dot">
+    Birth places, ancestral homes, and residential addresses
+  </Card>
+  <Card title="Offices" icon="building">
+    Official positions and postings throughout career
+  </Card>
+  <Card title="Kinship" icon="users">
+    Family relationships and genealogical connections
+  </Card>
+  <Card title="Associations" icon="handshake">
+    Social relationships including teachers, students, and colleagues
+  </Card>
+</CardGroup>
+
+## Main Biographical Table
+
+### BIOG_MAIN Structure
+
+The `BIOG_MAIN` table serves as the central entity for all biographical records:
+
+```sql
+CREATE TABLE BIOG_MAIN (
+    c_personid INT PRIMARY KEY,
+    c_name VARCHAR(60),           -- English name
+    c_name_chn VARCHAR(20),       -- Chinese name
+    c_surname_chn VARCHAR(10),    -- Surname
+    c_mingzi_chn VARCHAR(10),     -- Given name
+    c_index_year INT,             -- Representative year
+    c_dy INT,                     -- Dynasty code
+    c_birthyear INT,              -- Birth year
+    c_deathyear INT,              -- Death year
+    c_female TINYINT DEFAULT 0,   -- Gender (0=male, 1=female)
+    c_index_addr_id INT           -- Representative address
+);
+```
+
+<Note>
+The `c_personid` is the unique identifier used across all related tables. All biographical data is linked through this key.
+</Note>
+
+## Alternate Names (ALTNAME_DATA)
+
+### Name Types
+
+CBDB supports multiple types of names for each person:
+
+<Accordion title="Name Type Codes">
+- **1**: 字 (Zi, Style name)
+- **2**: 號 (Hao, Pseudonym)
+- **3**: 諡 (Shi, Posthumous name)
+- **4**: 別名 (Bie ming, Alternative name)
+- **5**: 筆名 (Bi ming, Pen name)
+- **8**: 室名 (Shi ming, Studio name)
+- **9**: 堂號 (Tang hao, Hall name)
+</Accordion>
+
+### Composite Primary Key
+
+```sql
+CREATE TABLE ALTNAME_DATA (
+    c_personid INT,
+    c_sequence INT,
+    c_alt_name_chn VARCHAR(50),
+    c_alt_name_type_code INT,
+    PRIMARY KEY (c_personid, c_sequence, c_alt_name_chn, c_alt_name_type_code)
+);
+```
+
+<Warning>
+The `ALTNAME_DATA` table uses a composite primary key. When working with this table, you must use Laravel's Query Builder (`DB::table()`) instead of Eloquent models.
+</Warning>
+
+## Addresses (BIOG_ADDR_DATA)
+
+### Address Types
+
+The system tracks multiple address types for each person:
+
+```php
+// Address type codes
+$addressTypes = [
+    1 => 'Basic Affiliation (籍貫)',
+    2 => 'Alternate Affiliation',
+    3 => 'Death Place',
+    4 => 'Flourished',
+    5 => 'Office Address',
+    6 => 'Burial Place',
+    7 => 'Unspecified Address',
+    8 => 'Ancestral Home'
+];
+```
+
+### Structure
+
+```sql
+CREATE TABLE BIOG_ADDR_DATA (
+    c_personid INT,
+    c_addr_id INT,
+    c_addr_type INT,
+    c_sequence INT,
+    PRIMARY KEY (c_personid, c_addr_id, c_addr_type, c_sequence)
+);
+```
+
+## Office Postings
+
+### Three-Table Structure
+
+Office postings use a complex three-table structure to capture all details:
+
+<Steps>
+  <Step title="POSTING_DATA">
+    Contains the posting record with person ID and sequence number:
+    
+    ```sql
+    CREATE TABLE POSTING_DATA (
+        c_personid INT,
+        c_posting_id INT,
+        c_sequence INT,
+        PRIMARY KEY (c_personid, c_posting_id)
+    );
+    ```
+  </Step>
+
+  <Step title="POSTED_TO_OFFICE_DATA">
+    Links posting to specific office with dates and details:
+    
+    ```sql
+    CREATE TABLE POSTED_TO_OFFICE_DATA (
+        c_personid INT,
+        c_posting_id INT,
+        c_office_id INT,
+        c_firstyear INT,
+        c_lastyear INT,
+        c_dy INT,
+        PRIMARY KEY (c_personid, c_posting_id, c_office_id)
+    );
+    ```
+  </Step>
+
+  <Step title="POSTED_TO_ADDR_DATA">
+    Associates posting with location(s):
+    
+    ```sql
+    CREATE TABLE POSTED_TO_ADDR_DATA (
+        c_personid INT,
+        c_posting_id INT,
+        c_office_id INT,
+        c_addr_id INT,
+        PRIMARY KEY (c_personid, c_posting_id, c_office_id, c_addr_id)
+    );
+    ```
+  </Step>
+</Steps>
+
+<Info>
+All three posting tables use composite primary keys and must be managed together as a unit. Use the `BiogMainRepository` methods for office operations.
+</Info>
+
+## Kinship Relationships (KIN_DATA)
+
+### Kinship Codes
+
+The system uses standardized kinship codes:
+
+```php
+// Example kinship codes
+$kinshipCodes = [
+    'F' => 'Father (父)',
+    'M' => 'Mother (母)',
+    'S' => 'Son (子)',
+    'D' => 'Daughter (女)',
+    'W' => 'Wife (妻)',
+    'B' => 'Brother (兄弟)',
+    'Z' => 'Sister (姊妹)',
+    'U' => 'Unspecified (未詳)'
+];
+```
+
+### Structure
+
+```sql
+CREATE TABLE KIN_DATA (
+    c_personid INT,
+    c_kin_id INT,
+    c_kinrel_code VARCHAR(10),
+    c_sequence INT,
+    PRIMARY KEY (c_personid, c_kin_id, c_kinrel_code, c_sequence)
+);
+```
+
+## Social Associations (ASSOC_DATA)
+
+### Association Types
+
+<CardGroup cols={2}>
+  <Card title="Academic" icon="graduation-cap">
+    Teacher-student relationships (師生關係)
+  </Card>
+  <Card title="Official" icon="briefcase">
+    Colleague relationships (同僚關係)
+  </Card>
+  <Card title="Literary" icon="pen-fancy">
+    Literary connections (文學交往)
+  </Card>
+  <Card title="Personal" icon="user-group">
+    Friendships and acquaintances (友誼)
+  </Card>
+</CardGroup>
+
+### Structure
+
+```sql
+CREATE TABLE ASSOC_DATA (
+    c_personid INT,
+    c_assoc_id INT,
+    c_assoc_code INT,
+    c_assoc_year INT,
+    c_text_title VARCHAR(255),
+    PRIMARY KEY (c_personid, c_assoc_id, c_assoc_code)
+);
+```
+
+## Text References (TEXT_DATA)
+
+### Purpose
+
+Links biographical records to source texts and references:
+
+```sql
+CREATE TABLE TEXT_DATA (
+    c_personid INT,
+    c_textid INT,
+    c_pages VARCHAR(200),
+    c_sequence INT,
+    PRIMARY KEY (c_personid, c_textid, c_sequence)
+);
+```
+
+<Info>
+Text references provide scholarly citations and source documentation for biographical claims.
+</Info>
+
+## Data Entry Best Practices
+
+### Working with Composite Keys
+
+When entering data for tables with composite primary keys:
+
+```php
+// ✅ Correct: Use Query Builder
+DB::table('ALTNAME_DATA')->insert([
+    'c_personid' => 12345,
+    'c_sequence' => 1,
+    'c_alt_name_chn' => '文正',
+    'c_alt_name_type_code' => 3 // Posthumous name
+]);
+
+// ❌ Wrong: Don't use Eloquent for composite key tables
+$altname = new AltnameData();
+$altname->save(); // Will fail!
+```
+
+### Data Validation
+
+<Steps>
+  <Step title="Verify Person Exists">
+    Always check that `c_personid` exists in `BIOG_MAIN` before adding related data.
+  </Step>
+  
+  <Step title="Use Valid Codes">
+    Ensure all code values (dynasty, address type, kinship, etc.) reference valid code tables.
+  </Step>
+  
+  <Step title="Maintain Referential Integrity">
+    When deleting a person, handle or delete all related records in linked tables.
+  </Step>
+</Steps>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Data Entry Guide" icon="pen" href="/user-guide/data-entry">
+    Step-by-step guide for entering biographical data
+  </Card>
+  <Card title="Database Schema" icon="database" href="/development/database-schema">
+    Complete database structure reference
+  </Card>
+  <Card title="Managing Records" icon="list-check" href="/user-guide/managing-records">
+    Edit, update, and maintain biographical records
+  </Card>
+  <Card title="Operations History" icon="clock-rotate-left" href="/features/operations-history">
+    Track changes and restore previous versions
+  </Card>
+</CardGroup>

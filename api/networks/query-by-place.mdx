@@ -1,0 +1,389 @@
+---
+title: 'Query by Place'
+description: 'Query all people in a specific location with flexible place type filtering'
+---
+
+## Overview
+
+The Query by Place endpoint allows you to find all people associated with specific locations in the CBDB database. You can filter by various place relationship types including residence, entry location, office posting location, and more.
+
+## Endpoint
+
+<RequestExample>
+```bash
+POST https://input.cbdb.fas.harvard.edu/api/query_by_place
+```
+</RequestExample>
+
+## Request Parameters
+
+<ParamField body="peoplePlace" type="array" required>
+  Array of place IDs to query. Example: `[2928, 10522, 12553, 13947, 13949]`.
+</ParamField>
+
+<ParamField body="placeType" type="array" required>
+  Array of place relationship types to include. Valid values:
+  - `individual`: Person's basic address/residence
+  - `entry`: Entry (examination) location
+  - `association`: Location related to social associations
+  - `officePosting`: Office posting location
+  - `institutional`: Institutional affiliation location
+  - `kinship`: Location related to kinship records
+  - `associate`: Location of social relationship person
+</ParamField>
+
+<ParamField body="useDate" type="number" default="0">
+  Enable date filtering. Set to `1` to activate date parameters, `0` to ignore them.
+  
+  When set to `0`, the following parameters are ignored: `dateType`, `dateStartTime`, `dateEndTime`, `dynStart`, `dynEnd`.
+</ParamField>
+
+<ParamField body="dateType" type="string">
+  Date filter type when `useDate=1`:
+  - `index`: Use index year range
+  - `dynasty`: Use dynasty range
+</ParamField>
+
+<ParamField body="dateStartTime" type="number">
+  Starting index year when `dateType="index"`.
+</ParamField>
+
+<ParamField body="dateEndTime" type="number">
+  Ending index year when `dateType="index"`.
+</ParamField>
+
+<ParamField body="dynStart" type="number">
+  Starting dynasty code when `dateType="dynasty"`.
+</ParamField>
+
+<ParamField body="dynEnd" type="number">
+  Ending dynasty code when `dateType="dynasty"`.
+</ParamField>
+
+<ParamField body="useXy" type="number" default="0">
+  Include geographic coordinates in results. Set to `1` to enable.
+</ParamField>
+
+<ParamField body="start" type="number" default="0">
+  Starting record number for pagination.
+</ParamField>
+
+<ParamField body="list" type="number">
+  Number of records to return.
+</ParamField>
+
+<Note>
+  When `dateType="index"`, only `dateStartTime` and `dateEndTime` are used. When `dateType="dynasty"`, only `dynStart` and `dynEnd` are used.
+</Note>
+
+## Place Types Explained
+
+Different place types represent different kinds of associations between people and locations:
+
+- **individual**: The person's primary address or place of residence (基本地址)
+- **entry**: Where the person took examinations or entered officialdom (入仕地點)
+- **association**: Places related to the person's social associations (社會關係地點)
+- **officePosting**: Where the person held official positions (任官地點)
+- **institutional**: Places of institutional affiliations like schools or temples (機構地點)
+- **kinship**: Places mentioned in kinship records (親屬關係地點)
+- **associate**: Places associated with people in the person's social network (社會關係人地點)
+
+<Tip>
+  You can combine multiple place types to get a comprehensive view of all people connected to a location. For example, `["individual", "entry", "officePosting"]` finds people who lived there, took exams there, or held office there.
+</Tip>
+
+## Response Fields
+
+<ResponseField name="total" type="number">
+  Total number of records found.
+</ResponseField>
+
+<ResponseField name="start" type="number">
+  Starting record number of current page.
+</ResponseField>
+
+<ResponseField name="end" type="number">
+  Ending record number of current page.
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of person-place relationship records.
+</ResponseField>
+
+<ResponseField name="data[i].PersonID" type="number">
+  Person's unique identifier.
+</ResponseField>
+
+<ResponseField name="data[i].Name" type="string">
+  Person's name in English.
+</ResponseField>
+
+<ResponseField name="data[i].NameChn" type="string">
+  Person's name in Chinese.
+</ResponseField>
+
+<ResponseField name="data[i].Sex" type="string">
+  Person's sex (`M` for male, `F` for female).
+</ResponseField>
+
+<ResponseField name="data[i].IndexYear" type="number">
+  Person's index year (representative year of their life).
+</ResponseField>
+
+<ResponseField name="data[i].IndexYearType" type="string">
+  Index year type in English (e.g., "Birth Year", "Floruit").
+</ResponseField>
+
+<ResponseField name="data[i].IndexYearTypeChn" type="string">
+  Index year type in Chinese.
+</ResponseField>
+
+<ResponseField name="data[i].IndexYearCode" type="string">
+  Code representing the index year type.
+</ResponseField>
+
+<ResponseField name="data[i].PlaceName" type="string">
+  Place name in English.
+</ResponseField>
+
+<ResponseField name="data[i].PlaceNameChn" type="string">
+  Place name in Chinese.
+</ResponseField>
+
+<ResponseField name="data[i].PlaceAssocName" type="string">
+  Name of associated person related to this place (if applicable), in English.
+</ResponseField>
+
+<ResponseField name="data[i].PlaceAssocChn" type="string">
+  Name of associated person in Chinese.
+</ResponseField>
+
+<ResponseField name="data[i].PlaceAssocStart" type="number">
+  Starting year of the place association.
+</ResponseField>
+
+<ResponseField name="data[i].PlaceAssocEnd" type="number">
+  Ending year of the place association.
+</ResponseField>
+
+<ResponseField name="data[i].PlaceType" type="string">
+  Place relationship type (one of the values from `placeType` parameter).
+</ResponseField>
+
+<ResponseField name="data[i].PlaceTypeDetail" type="string">
+  Detailed place relationship type in English.
+</ResponseField>
+
+<ResponseField name="data[i].PlaceTypeDetailChn" type="string">
+  Detailed place relationship type in Chinese.
+</ResponseField>
+
+<ResponseField name="data[i].X" type="number">
+  Place longitude coordinate (when `useXy=1`).
+</ResponseField>
+
+<ResponseField name="data[i].Y" type="number">
+  Place latitude coordinate (when `useXy=1`).
+</ResponseField>
+
+## Example Requests
+
+### Query by Index Year
+
+<CodeGroup>
+```json Request Body
+{
+  "peoplePlace": [2928, 10522, 12553, 13947, 13949],
+  "placeType": ["individual", "entry", "officePosting"],
+  "useDate": 1,
+  "dateType": "index",
+  "dateStartTime": 1200,
+  "dateEndTime": 1644,
+  "dynStart": null,
+  "dynEnd": null,
+  "useXy": 1,
+  "start": 0,
+  "list": 10
+}
+```
+
+```bash cURL
+curl -X POST https://input.cbdb.fas.harvard.edu/api/query_by_place \
+  -H "Content-Type: application/json" \
+  -d '{
+    "peoplePlace": [2928, 10522, 12553, 13947, 13949],
+    "placeType": ["individual", "entry", "officePosting"],
+    "useDate": 1,
+    "dateType": "index",
+    "dateStartTime": 1200,
+    "dateEndTime": 1644,
+    "useXy": 1,
+    "start": 0,
+    "list": 10
+  }'
+```
+</CodeGroup>
+
+**Query Description**: Find all people whose residence, entry location, or office posting location was in one of the specified places, with an index year between 1200 and 1644.
+
+### Query by Dynasty
+
+<CodeGroup>
+```json Request Body
+{
+  "peoplePlace": [2928, 10522, 12553, 13947, 13949],
+  "placeType": ["individual", "entry", "officePosting"],
+  "useDate": 1,
+  "dateType": "dynasty",
+  "dateStartTime": null,
+  "dateEndTime": null,
+  "dynStart": 17,
+  "dynEnd": 22,
+  "useXy": 1,
+  "start": 0,
+  "list": 10
+}
+```
+
+```bash cURL
+curl -X POST https://input.cbdb.fas.harvard.edu/api/query_by_place \
+  -H "Content-Type: application/json" \
+  -d '{
+    "peoplePlace": [2928, 10522, 12553, 13947, 13949],
+    "placeType": ["individual", "entry", "officePosting"],
+    "useDate": 1,
+    "dateType": "dynasty",
+    "dynStart": 17,
+    "dynEnd": 22,
+    "useXy": 1,
+    "start": 0,
+    "list": 10
+  }'
+```
+</CodeGroup>
+
+**Query Description**: Find all people in the specified locations during dynasties 17 (Jin) through 22 (Qing).
+
+### Query All Time Periods
+
+<CodeGroup>
+```json Request Body
+{
+  "peoplePlace": [13305],
+  "placeType": ["individual"],
+  "useDate": 0,
+  "useXy": 1,
+  "start": 0,
+  "list": 100
+}
+```
+
+```bash cURL
+curl -X POST https://input.cbdb.fas.harvard.edu/api/query_by_place \
+  -H "Content-Type: application/json" \
+  -d '{
+    "peoplePlace": [13305],
+    "placeType": ["individual"],
+    "useDate": 0,
+    "useXy": 1,
+    "start": 0,
+    "list": 100
+  }'
+```
+</CodeGroup>
+
+**Query Description**: Find all people whose residence was in place 13305 (Meishan), across all time periods.
+
+## Example Response
+
+<CodeGroup>
+```json 200 - Success
+{
+  "total": 234,
+  "start": 0,
+  "end": 10,
+  "data": [
+    {
+      "PersonID": 3767,
+      "Name": "Su Shi",
+      "NameChn": "蘇軾",
+      "Sex": "M",
+      "IndexYear": 1082,
+      "IndexYearType": "Floruit",
+      "IndexYearTypeChn": "活躍年",
+      "IndexYearCode": "FL",
+      "PlaceName": "Meishan",
+      "PlaceNameChn": "眉山",
+      "PlaceAssocName": "",
+      "PlaceAssocChn": "",
+      "PlaceAssocStart": null,
+      "PlaceAssocEnd": null,
+      "PlaceType": "individual",
+      "PlaceTypeDetail": "Basic Affiliation",
+      "PlaceTypeDetailChn": "籍貫（基本地址）",
+      "X": 103.831459,
+      "Y": 30.050497
+    },
+    {
+      "PersonID": 1493,
+      "Name": "Su Zhe",
+      "NameChn": "蘇轍",
+      "Sex": "M",
+      "IndexYear": 1079,
+      "IndexYearType": "Floruit",
+      "IndexYearTypeChn": "活躍年",
+      "IndexYearCode": "FL",
+      "PlaceName": "Meishan",
+      "PlaceNameChn": "眉山",
+      "PlaceAssocName": "",
+      "PlaceAssocChn": "",
+      "PlaceAssocStart": null,
+      "PlaceAssocEnd": null,
+      "PlaceType": "individual",
+      "PlaceTypeDetail": "Basic Affiliation",
+      "PlaceTypeDetailChn": "籍貫（基本地址）",
+      "X": 103.831459,
+      "Y": 30.050497
+    }
+  ]
+}
+```
+</CodeGroup>
+
+## Use Cases
+
+### Regional Prosopography
+Find all officials who served in a specific region during a particular dynasty:
+```json
+{
+  "peoplePlace": [9099],
+  "placeType": ["officePosting"],
+  "useDate": 1,
+  "dateType": "dynasty",
+  "dynStart": 15,
+  "dynEnd": 15
+}
+```
+
+### Examination Centers
+Discover all people who took examinations at specific locations:
+```json
+{
+  "peoplePlace": [2928, 10522],
+  "placeType": ["entry"],
+  "useDate": 1,
+  "dateType": "index",
+  "dateStartTime": 1100,
+  "dateEndTime": 1200
+}
+```
+
+### Comprehensive Local History
+Get a complete picture of all people associated with a location:
+```json
+{
+  "peoplePlace": [13305],
+  "placeType": ["individual", "entry", "association", "officePosting", "institutional", "kinship"],
+  "useDate": 0
+}
+```

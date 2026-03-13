@@ -1,0 +1,341 @@
+---
+title: 'Query Social Network'
+description: 'Query social relationships and networks with N-degree separation algorithm'
+---
+
+## Overview
+
+The Query Social Network endpoint allows you to discover social relationships between people in the CBDB database using an N-degree separation algorithm. You can find direct connections (1-degree) or indirect connections up to 2 degrees of separation.
+
+## Endpoint
+
+<RequestExample>
+```bash
+POST https://input.cbdb.fas.harvard.edu/api/query_assoc_network
+```
+</RequestExample>
+
+## Request Parameters
+
+<ParamField body="people" type="array" required>
+  Array of person IDs to query. Example: `[1762, 3767]` for Wang Anshi and Su Shi.
+</ParamField>
+
+<ParamField body="assocCode" type="array">
+  Array of specific association codes to filter by. Example: `[429]` for correspondence relationships.
+</ParamField>
+
+<ParamField body="assocType" type="array">
+  Array of association type categories. Example: `["02"]` for academic relationships. This will include all association codes under that category.
+</ParamField>
+
+<ParamField body="maxNodeDist" type="number" default="1">
+  Maximum N-degree separation steps. Valid values:
+  - `0`: Only relationships between the specified people themselves
+  - `1`: Direct connections (one step away)
+  - `2`: Indirect connections (up to two steps away)
+  
+  Values greater than 2 are not supported due to computational complexity.
+</ParamField>
+
+<ParamField body="place" type="array">
+  Array of place IDs to filter people by location.
+</ParamField>
+
+<ParamField body="usePeoplePlace" type="number" default="0">
+  Enable place filtering. Set to `1` to activate, `0` to ignore place parameter.
+</ParamField>
+
+<ParamField body="useXy" type="number" default="0">
+  Include geographic coordinates in results. Set to `1` to enable.
+</ParamField>
+
+<ParamField body="broad" type="number" default="0">
+  Administrative region scope:
+  - `0`: Narrow scope (±0.03 degrees)
+  - `1`: Broad scope (±0.06 degrees)
+</ParamField>
+
+<ParamField body="useDy" type="number" default="0">
+  Enable dynasty filtering. Set to `1` to activate, `0` to ignore dynasty parameters.
+</ParamField>
+
+<ParamField body="dynStart" type="number">
+  Starting dynasty code when `useDy=1`.
+</ParamField>
+
+<ParamField body="dynEnd" type="number">
+  Ending dynasty code when `useDy=1`.
+</ParamField>
+
+<ParamField body="includeMale" type="number" default="1">
+  Include male individuals. Set to `1` to include, `0` to exclude.
+</ParamField>
+
+<ParamField body="includeFemale" type="number" default="1">
+  Include female individuals. Set to `1` to include, `0` to exclude.
+</ParamField>
+
+<ParamField body="start" type="number" default="0">
+  Starting record number for pagination.
+</ParamField>
+
+<ParamField body="list" type="number">
+  Number of records to return.
+</ParamField>
+
+## N-Degree Separation Algorithm
+
+The `maxNodeDist` parameter controls the depth of social network traversal:
+
+### 0-Degree (Direct Relationships Only)
+When `maxNodeDist=0`, only returns relationships where both `c_personid` and `c_assoc_id` are in the `people` array. For example, if you query Wang Anshi (1762) and Su Shi (3767), you'll only see their direct relationship with each other (if any exists).
+
+### 1-Degree (One Step Away)
+When `maxNodeDist=1`, finds all people who have direct relationships with anyone in the `people` array. Using the same example:
+- Su Shi wrote to his brother Su Zhe (1493)
+- Su Shi studied under Liu Ju (26417)
+- **Bonus**: Also returns relationships between discovered people (Liu Ju was also Su Zhe's teacher)
+
+### 2-Degree (Two Steps Away)
+When `maxNodeDist=2`, performs two rounds of queries:
+1. First finds all 1-degree connections
+2. Then finds all 1-degree connections of those people
+3. Results are deduplicated by `c_personid`, `c_assoc_id`, `c_assoc_code`, `c_text_title`
+4. Prevents circular queries (avoids a→b, b→a duplicates)
+
+<Warning>
+  Values greater than 2 are not supported. The API will return an error: "API 暫不支援 maxNodeDist 大於 2 之查詢"
+</Warning>
+
+## Response Fields
+
+<ResponseField name="total" type="number">
+  Total number of records found.
+</ResponseField>
+
+<ResponseField name="start" type="number">
+  Starting record number of current page.
+</ResponseField>
+
+<ResponseField name="end" type="number">
+  Ending record number of current page.
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of relationship records.
+</ResponseField>
+
+<ResponseField name="data[i].pId" type="number">
+  Person ID (from `ASSOC_DATA.c_personid`).
+</ResponseField>
+
+<ResponseField name="data[i].pName" type="string">
+  Person name in English.
+</ResponseField>
+
+<ResponseField name="data[i].pNameChn" type="string">
+  Person name in Chinese.
+</ResponseField>
+
+<ResponseField name="data[i].pIndexYear" type="number">
+  Person's index year.
+</ResponseField>
+
+<ResponseField name="data[i].pSex" type="string">
+  Person's sex (`M` for male, `F` for female).
+</ResponseField>
+
+<ResponseField name="data[i].aId" type="number">
+  Associated person ID (from `ASSOC_DATA.c_assoc_id`).
+</ResponseField>
+
+<ResponseField name="data[i].aName" type="string">
+  Associated person name in English.
+</ResponseField>
+
+<ResponseField name="data[i].aNameChn" type="string">
+  Associated person name in Chinese.
+</ResponseField>
+
+<ResponseField name="data[i].aIndexYear" type="number">
+  Associated person's index year.
+</ResponseField>
+
+<ResponseField name="data[i].aSex" type="string">
+  Associated person's sex.
+</ResponseField>
+
+<ResponseField name="data[i].pAddrID" type="number">
+  Person's index address ID.
+</ResponseField>
+
+<ResponseField name="data[i].pAddrName" type="string">
+  Person's address name in English.
+</ResponseField>
+
+<ResponseField name="data[i].pAddrNameChn" type="string">
+  Person's address name in Chinese.
+</ResponseField>
+
+<ResponseField name="data[i].pX" type="number">
+  Person's address longitude coordinate.
+</ResponseField>
+
+<ResponseField name="data[i].pY" type="number">
+  Person's address latitude coordinate.
+</ResponseField>
+
+<ResponseField name="data[i].aAddrID" type="number">
+  Associated person's index address ID.
+</ResponseField>
+
+<ResponseField name="data[i].aAddrName" type="string">
+  Associated person's address name in English.
+</ResponseField>
+
+<ResponseField name="data[i].aAddrNameChn" type="string">
+  Associated person's address name in Chinese.
+</ResponseField>
+
+<ResponseField name="data[i].aX" type="number">
+  Associated person's address longitude coordinate.
+</ResponseField>
+
+<ResponseField name="data[i].aY" type="number">
+  Associated person's address latitude coordinate.
+</ResponseField>
+
+<ResponseField name="data[i].pAssocRelationId" type="number">
+  Association type ID (from `ASSOC_DATA.c_assoc_code`).
+</ResponseField>
+
+<ResponseField name="data[i].pAssocRelation" type="string">
+  Association type description in English.
+</ResponseField>
+
+<ResponseField name="data[i].pAssocRelationChn" type="string">
+  Association type description in Chinese.
+</ResponseField>
+
+<ResponseField name="data[i].distance" type="number">
+  Geographic distance between person and associated person (calculated from coordinates).
+</ResponseField>
+
+<ResponseField name="data[i].count" type="number">
+  Number of times this association occurred (from `ASSOC_DATA.c_assoc_count`).
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+```json Request Body
+{
+  "people": [1762, 3767],
+  "assocCode": [429],
+  "assocType": ["02"],
+  "maxNodeDist": 1,
+  "place": [13305],
+  "usePeoplePlace": 1,
+  "broad": 0,
+  "useDy": 1,
+  "dynStart": 15,
+  "dynEnd": 15,
+  "includeMale": 1,
+  "includeFemale": 1,
+  "start": 0,
+  "list": 10
+}
+```
+
+```bash cURL
+curl -X POST https://input.cbdb.fas.harvard.edu/api/query_assoc_network \
+  -H "Content-Type: application/json" \
+  -d '{
+    "people": [1762, 3767],
+    "assocCode": [429],
+    "assocType": ["02"],
+    "maxNodeDist": 1,
+    "place": [13305],
+    "usePeoplePlace": 1,
+    "broad": 0,
+    "useDy": 1,
+    "dynStart": 15,
+    "dynEnd": 15,
+    "includeMale": 1,
+    "includeFemale": 1,
+    "start": 0,
+    "list": 10
+  }'
+```
+</CodeGroup>
+
+### Query Description
+
+This example finds the social network of Wang Anshi (1762) and Su Shi (3767) during the Song Dynasty (dynasty code 15). It searches for:
+- Correspondence relationships (assocCode 429)
+- Academic relationships (assocType 02)
+- People near Meishan (place 13305) with narrow scope
+- Only direct connections (maxNodeDist=1)
+
+The query also returns relationships between discovered people. For example:
+- Su Shi wrote to his brother Su Zhe (1493)
+- Su Shi studied under Liu Ju (26417)
+- Liu Ju was also Su Zhe's teacher (this relationship is included even though it's between two discovered people)
+
+## Example Response
+
+<CodeGroup>
+```json 200 - Success
+{
+  "total": 100,
+  "start": 0,
+  "end": 10,
+  "data": [
+    {
+      "pId": "1493",
+      "pName": "Su Zhe",
+      "pNameChn": "蘇轍",
+      "aId": "26417",
+      "aName": "Liu Ju(2)",
+      "aNameChn": "劉巨",
+      "pIndexYear": "1039",
+      "pSex": "M",
+      "aIndexYear": "",
+      "aSex": "M",
+      "pAddrID": "13305",
+      "pAddrName": "Meishan",
+      "pAddrNameChn": "眉山",
+      "pX": "103.831459",
+      "pY": "30.050497",
+      "aAddrID": "13305",
+      "aAddrName": "Meishan",
+      "aAddrNameChn": "眉山",
+      "aX": "103.831459",
+      "aY": "30.050497",
+      "pAssocRelationId": "22",
+      "pAssocRelation": "Student of",
+      "pAssocRelationChn": "為Y之學生",
+      "distance": "0",
+      "count": 1
+    }
+  ]
+}
+```
+</CodeGroup>
+
+## Place Filtering Logic
+
+When using place filters with `usePeoplePlace=1`, the API applies special logic depending on whether people are in the query array:
+
+1. **If person is in the `people` array**:
+   - If associated person is NOT in `people` array: Associated person must be in specified place
+   - If associated person IS in `people` array: Keep the record (both can be outside specified place)
+
+2. **If associated person is in the `people` array**:
+   - If person is NOT in `people` array: Person must be in specified place
+   - If person IS in `people` array: Keep the record
+
+3. **Both person and associated person must be in specified place** (when neither is in `people` array)
+
+This logic ensures you find the network around your target people while filtering external connections by location.

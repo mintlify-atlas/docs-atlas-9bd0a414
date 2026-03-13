@@ -1,0 +1,489 @@
+---
+title: 批次操作
+description: 使用批次匯入工具快速導入書稿、官職、社會機構等資料
+---
+
+批次匯入功能允許活躍的專家或系統管理員快速導入大量書稿、官職、社會機構資料。所有匯入操作會自動記錄於 `operations` 表，支援稽核與復原。
+
+<Warning>
+  **權限要求**
+  
+  批次匯入功能僅限 `is_active = 1` 且 `is_admin` 為專家（1）或系統管理員（3）的用戶使用。
+</Warning>
+
+## 批次匯入工具概覽
+
+CBDB Online 提供三種批次匯入工具：
+
+<CardGroup cols={3}>
+  <Card title="書稿資料" icon="book">
+    批次新增 `TEXT_CODES` 記錄
+  </Card>
+  
+  <Card title="官職資料" icon="landmark">
+    批次新增 `OFFICE_CODES` 與 `OFFICE_CODE_TYPE_REL`
+  </Card>
+  
+  <Card title="社會機構" icon="building">
+    批次新增 `SOCIAL_INSTITUTION_NAME_CODES`、`SOCIAL_INSTITUTION_CODES`、`SOCIAL_INSTITUTION_ADDR`
+  </Card>
+</CardGroup>
+
+## 共通注意事項
+
+<Note>
+  **輸入格式規範**
+  
+  - 所有欄位以 **Tab** (`\t`) 分隔
+  - 空行會被自動忽略
+  - 單行失敗會終止整批匯入並回傳錯誤訊息
+  - 系統不會自動建立參照資料（如朝代、官職類型、來源文本），請事先確認資料庫已有對應記錄
+</Note>
+
+<Warning>
+  **交易安全**
+  
+  匯入期間使用資料庫交易，單行失敗會終止整批匯入並回滾所有變更。請確保資料正確性後再執行匯入。
+</Warning>
+
+## 批次匯入書稿
+
+### 功能說明
+
+一次性建立多筆 `TEXT_CODES` 記錄，適用於快速導入著作書目。系統會自動：
+- 分配 `c_textid`（目前為 `max(c_textid) + 1`）
+- 清理書名多餘空白與標點
+- 使用 `VariantCharNormalizer` 標準化異體字後生成拼音
+- 從 `BIOG_MAIN` 取得作者朝代
+
+### 輸入格式
+
+每行需包含三欄，以 Tab 分隔：
+
+| 欄位 | 說明 | 範例 |
+|-----|------|------|
+| 作者 CBDB ID | 整數，必須存在於 `BIOG_MAIN` | `12345` |
+| 書名（中文） | 字符串，不可為空 | `某某書稿` |
+| 來源 TEXT_ID | 整數，必須存在於 `TEXT_CODES` | `54321` |
+
+**範例輸入**：
+```
+12345	某某書稿	54321
+67890	文集: 卷一至卷十	54322
+```
+
+### 匯入流程
+
+<Steps>
+  <Step title="準備資料">
+    將資料整理為 Tab 分隔格式。可使用 Excel 或 Google Sheets，複製後貼上即可保留 Tab 分隔。
+  </Step>
+  
+  <Step title="前往批次匯入頁面">
+    登入後，前往側欄 **Management** 區塊，點擊 **批次匯入書稿**。
+  </Step>
+  
+  <Step title="貼上資料">
+    在文字框中貼上準備好的 Tab 分隔資料。
+  </Step>
+  
+  <Step title="驗證與提交">
+    系統會自動驗證：
+    - 作者 ID 和來源 TEXT_ID 是否為整數
+    - 來源是否存在於 `TEXT_CODES`
+    - 書名是否為空
+    
+    確認無誤後點擊「匯入」。
+  </Step>
+  
+  <Step title="檢視結果">
+    匯入成功後會顯示結果表格，包含：
+    - 行號
+    - 作者 ID
+    - 書名（清理後）
+    - 拼音
+    - 朝代
+    - 分配的 `c_textid`
+    - 批次編號（格式：`[YYYYMMDDHHMMSS]`）
+  </Step>
+</Steps>
+
+### 系統處理細節
+
+1. **拼音轉換**：
+   - 使用 `VariantCharNormalizer::normalize()` 標準化異體字（如「菴」→「庵」）
+   - 透過 `App\Models\Pinyin` 生成拼音
+   - 非漢字會保留原字詞
+
+2. **書名處理**：
+   - 冒號前後留空格：`文集: 卷一`
+   - 冒號之後的卷次資訊保留於原始欄位
+   - 拼音生成時會去除卷次資訊
+
+3. **朝代查詢**：
+   - 從 `BIOG_MAIN` 根據作者 ID 查詢 `c_dy`
+   - 若查無資料則保留空值
+
+4. **固定欄位**：
+   - `c_text_type_id` 固定為 `01`
+   - `c_notes` 帶上批次編號 `[YYYYMMDDHHMMSS]`
+
+### 影響資料表
+
+- `TEXT_CODES` — 新增多筆記錄
+- `operations` — 以 `op_type = 1`（新增）記錄每筆建立
+
+<Accordion title="AdminBatchLoadBookTitlesController 原始碼參考" icon="code">
+  相關檔案：`app/Http/Controllers/AdminBatchLoadBookTitlesController.php`
+  
+  主要方法：
+  - `showForm()` — 顯示匯入表單
+  - `store()` — 處理匯入邏輯
+  - `parseEntries()` — 解析 Tab 分隔資料
+  - `buildPinyin()` — 生成拼音
+  - `lookupDynasty()` — 查詢作者朝代
+</Accordion>
+
+## 批次匯入官職
+
+### 功能說明
+
+批次匯入 `OFFICE_CODES` 與 `OFFICE_CODE_TYPE_REL`，適合批量導入職名資料。系統會自動：
+- 分配 `c_office_id`（目前為 `max(c_office_id) + 1`）
+- 生成中文職名的拼音
+- 建立官職與官職類型的關聯
+
+### 輸入格式
+
+每行需包含六欄，以 Tab 分隔：
+
+| 欄位 | 說明 | 範例 |
+|-----|------|------|
+| 中文職名 | 字符串，不可為空 | `宗人府供事` |
+| 英文職名 | 字符串，可留空 | `Clerk in the Imperial Clan Court` |
+| 朝代（中文） | 必須對應 `DYNASTIES.c_dynasty_chn` | `清` |
+| 官職類型 ID | 必須存在於 `OFFICE_TYPE_TREE.c_office_type_node_id` | `200501` |
+| 所屬單位 | 備註，僅於結果表格展示 | `宗人府` |
+| 來源 TEXT_ID | 整數，必須存在於 `TEXT_CODES` | `4763` |
+
+**範例輸入**：
+```
+宗人府供事	Clerk in the Imperial Clan Court	清	200501	宗人府	4763
+```
+
+### 匯入流程
+
+<Steps>
+  <Step title="準備資料">
+    整理職名資料為 Tab 分隔格式。確認朝代名稱和官職類型 ID 已存在於資料庫。
+  </Step>
+  
+  <Step title="前往批次匯入頁面">
+    登入後，前往側欄 **Management** 區塊，點擊 **批次匯入官職**。
+  </Step>
+  
+  <Step title="貼上資料並提交">
+    在文字框中貼上資料，系統會驗證：
+    - 朝代是否存在於 `DYNASTIES`
+    - 官職類型 ID 是否存在於 `OFFICE_TYPE_TREE`
+    - 來源 TEXT_ID 是否存在於 `TEXT_CODES`
+  </Step>
+  
+  <Step title="檢視結果">
+    匯入成功後顯示結果表格，包含：
+    - 行號
+    - 分配的 `c_office_id`
+    - 職名與拼音
+    - 朝代代碼
+    - 官職類型 ID
+  </Step>
+</Steps>
+
+### 系統處理細節
+
+1. **拼音轉換**：
+   - 標準化異體字後，使用 `App\Models\Pinyin` 轉換中文職名
+   - 轉換為小寫，以空格分隔
+
+2. **關聯建立**：
+   - `OFFICE_CODES` 新增記錄後，立即建立 `OFFICE_CODE_TYPE_REL`
+   - 兩張表的新增行為分別記錄於 `operations`
+
+### 影響資料表
+
+- `OFFICE_CODES` — 新增官職記錄
+- `OFFICE_CODE_TYPE_REL` — 新增官職與類型的關聯
+- `operations` — 記錄兩張表的新增操作
+
+<Accordion title="AdminBatchLoadOfficesController 原始碼參考" icon="code">
+  相關檔案：`app/Http/Controllers/AdminBatchLoadOfficesController.php`
+  
+  主要方法：
+  - `getDynastyMap()` — 取得朝代映射
+  - `validateOfficeTypes()` — 驗證官職類型
+  - `validateSourceIds()` — 驗證來源 TEXT_ID
+</Accordion>
+
+## 批次匯入社會機構
+
+### 功能說明
+
+同時建立 `SOCIAL_INSTITUTION_NAME_CODES`、`SOCIAL_INSTITUTION_CODES` 與 `SOCIAL_INSTITUTION_ADDR` 三張表的記錄。若機構名稱已存在，會重用原始 `c_inst_name_code`。
+
+### 輸入格式
+
+每行需包含六欄，以 Tab 分隔：
+
+| 欄位 | 說明 | 範例 |
+|-----|------|------|
+| 機構名稱（中文） | 字符串，不可為空 | `南浦書院` |
+| 類型（中文或拼音） | 需對應 `SOCIAL_INSTITUTION_TYPES` | `書院` |
+| 朝代（中文） | 需對應 `DYNASTIES.c_dynasty_chn` | `清` |
+| 地址名稱 | 僅提示用途，可留白 | `浦城` |
+| 地址 ID | 整數，必須存在於 `ADDR_CODES` | `7793` |
+| 來源 TEXT_ID | 整數，必須存在於 `TEXT_CODES` | `4763` |
+
+**範例輸入**：
+```
+南浦書院	書院	清	浦城	7793	4763
+```
+
+### 匯入流程
+
+<Steps>
+  <Step title="準備資料">
+    整理機構資料為 Tab 分隔格式。確認類型、朝代、地址 ID 和來源 TEXT_ID 已存在於資料庫。
+  </Step>
+  
+  <Step title="前往批次匯入頁面">
+    登入後，前往側欄 **Management** 區塊，點擊 **批次匯入社會機構**。
+  </Step>
+  
+  <Step title="貼上資料並提交">
+    系統會驗證：
+    - 類型是否存在於 `SOCIAL_INSTITUTION_TYPES`（支援中文或拼音）
+    - 朝代是否存在於 `DYNASTIES`
+    - 地址 ID 是否存在於 `ADDR_CODES`
+    - 來源 TEXT_ID 是否存在於 `TEXT_CODES`
+  </Step>
+  
+  <Step title="檢視結果">
+    匯入成功後顯示結果表格，包含：
+    - 機構名稱與 name_code
+    - 拼音
+    - 是否為新建名稱
+    - 分配的 `c_inst_code`
+    - 類型和朝代代碼
+  </Step>
+</Steps>
+
+### 系統處理細節
+
+1. **名稱重用邏輯**：
+   - 若機構名稱已存在於 `SOCIAL_INSTITUTION_NAME_CODES`，沿用既有 `c_inst_name_code` 與拼音
+   - 若不存在，分配新 `c_inst_name_code` 並生成拼音
+
+2. **機構代碼分配**：
+   - 逐筆分配 `c_inst_code`（`max(c_inst_code) + 1`）
+   - 寫入 `SOCIAL_INSTITUTION_CODES`
+
+3. **地址記錄**：
+   - 為每筆機構建立對應的 `SOCIAL_INSTITUTION_ADDR`
+   - `c_inst_addr_type_code` 固定使用 `1`
+   - 座標預設為 `0`
+
+4. **操作記錄**：
+   - 每個步驟（名稱、機構本體、地址）皆寫入 `operations`
+
+### 影響資料表
+
+- `SOCIAL_INSTITUTION_NAME_CODES` — 新建或重用名稱記錄
+- `SOCIAL_INSTITUTION_CODES` — 新增機構記錄
+- `SOCIAL_INSTITUTION_ADDR` — 新增地址記錄
+- `operations` — 記錄所有變動
+
+<Accordion title="AdminBatchLoadSocialInstitutesController 原始碼參考" icon="code">
+  相關檔案：`app/Http/Controllers/AdminBatchLoadSocialInstitutesController.php`
+  
+  主要方法：
+  - `getTypeMap()` — 取得機構類型映射（支援中文與拼音）
+  - `getExistingNames()` — 查詢已存在的機構名稱
+  - `resolveNameCode()` — 重用或分配新的 name_code
+  - `validateAddressIds()` — 驗證地址 ID
+</Accordion>
+
+## 資料驗證與錯誤處理
+
+### 常見錯誤訊息
+
+<AccordionGroup>
+  <Accordion title="第 X 行未找到三欄資料" icon="exclamation-triangle">
+    **原因**：該行的欄位數量不足。
+    
+    **解決方案**：
+    - 確認每行都包含所需的欄位數量
+    - 檢查是否誤用空格而非 Tab 分隔
+    - 確認沒有多餘的換行符號
+  </Accordion>
+  
+  <Accordion title="第 X 行作者 ID 必須為整數" icon="exclamation-triangle">
+    **原因**：ID 欄位包含非數字字符。
+    
+    **解決方案**：
+    - 確認 ID 欄位只包含數字
+    - 移除多餘的空格或特殊字符
+  </Accordion>
+  
+  <Accordion title="找不到朝代「XX」對應的代碼" icon="exclamation-triangle">
+    **原因**：輸入的朝代名稱不存在於 `DYNASTIES` 表。
+    
+    **解決方案**：
+    - 查看 `DYNASTIES` 表確認正確的朝代名稱
+    - 確認輸入的朝代名稱與資料庫完全一致（包括繁簡體）
+  </Accordion>
+  
+  <Accordion title="找不到來源 TEXT_ID XX" icon="exclamation-triangle">
+    **原因**：來源 TEXT_ID 不存在於 `TEXT_CODES` 表。
+    
+    **解決方案**：
+    - 先建立來源文本記錄
+    - 或使用已存在的 TEXT_ID
+  </Accordion>
+</AccordionGroup>
+
+### 驗證流程
+
+所有批次匯入工具都會執行以下驗證：
+
+<Steps>
+  <Step title="格式驗證">
+    檢查每行是否包含正確數量的欄位（以 Tab 分隔）。
+  </Step>
+  
+  <Step title="資料型別驗證">
+    確認 ID 欄位為整數，文字欄位不為空。
+  </Step>
+  
+  <Step title="參照完整性驗證">
+    檢查朝代、類型、地址 ID、來源 TEXT_ID 是否存在於資料庫。
+  </Step>
+  
+  <Step title="批次處理">
+    若所有驗證通過，使用資料庫交易批次寫入資料。
+  </Step>
+</Steps>
+
+<Warning>
+  **交易回滾機制**
+  
+  若任何一行資料驗證失敗，整個批次匯入會回滾，不會寫入任何資料。請修正錯誤後重新匯入。
+</Warning>
+
+## 操作記錄與復原
+
+所有批次匯入操作都會記錄於 `operations` 表，可在 **操作記錄** 頁面查看和復原。
+
+### 查看批次操作記錄
+
+<Steps>
+  <Step title="前往操作記錄頁面">
+    登入後，點擊側欄的 **Operations**。
+  </Step>
+  
+  <Step title="篩選批次操作">
+    使用搜尋功能找到批次操作記錄：
+    - 搜尋批次編號（格式：`[YYYYMMDDHHMMSS]`）
+    - 篩選表格名稱（如 `TEXT_CODES`）
+    - 篩選操作類型為「新增」
+  </Step>
+  
+  <Step title="檢視變更內容">
+    點擊記錄查看詳細的 JSON 資料，包含所有欄位值。
+  </Step>
+</Steps>
+
+### 復原批次操作
+
+<Warning>
+  **復原功能限制**
+  
+  復原功能會以執行者的名義新增一筆 `op_type = 3` 的記錄，內容反映復原後的資料。請謹慎使用，確認無誤後再執行。
+</Warning>
+
+<Steps>
+  <Step title="找到要復原的記錄">
+    在操作記錄頁面找到批次匯入的記錄。
+  </Step>
+  
+  <Step title="逐筆復原">
+    點擊「復原」按鈕，系統會提示：「將以你的名義對該資源進行一次修改，恢復至本次改動之前，是否繼續？」
+  </Step>
+  
+  <Step title="確認復原結果">
+    復原成功後，檢查資料是否已恢復至批次匯入前的狀態。
+  </Step>
+</Steps>
+
+<Note>
+  批次匯入的每筆記錄都有獨立的操作記錄，需要逐筆復原。目前不支援批次復原功能。
+</Note>
+
+## 測試與維護
+
+所有批次匯入功能都配有完整的 Feature 測試：
+
+- `AdminBatchLoadBookTitlesTest`
+- `AdminBatchLoadSocialInstitutesTest`
+- `AdminBatchLoadOfficesTest`
+
+執行測試：
+
+```bash
+./vendor/bin/phpunit --filter AdminBatchLoad
+```
+
+<Accordion title="測試檔案位置" icon="flask">
+  測試檔案位於 `tests/Feature/` 目錄：
+  - `tests/Feature/AdminBatchLoadBookTitlesTest.php`
+  - `tests/Feature/AdminBatchLoadSocialInstitutesTest.php`
+  - `tests/Feature/AdminBatchLoadOfficesTest.php`
+</Accordion>
+
+## 安全注意事項
+
+<Warning>
+  **資料完整性**
+  
+  - 批次匯入會直接寫入資料庫，無法透過前端驗證
+  - 匯入前請務必備份資料庫
+  - 建議先在測試環境驗證資料格式
+  - 大量匯入前可先測試少量資料
+</Warning>
+
+<Warning>
+  **權限控制**
+  
+  - 批次匯入功能僅限活躍的專家或系統管理員
+  - 所有操作會記錄執行者資訊於 `operations` 表
+  - 定期審查批次操作記錄，確保無異常匯入
+</Warning>
+
+## 相關資源
+
+<CardGroup cols={2}>
+  <Card title="用戶管理" icon="users" href="/admin/user-management">
+    管理用戶帳號、角色與權限
+  </Card>
+  
+  <Card title="審計日誌" icon="clock-rotate-left" href="/admin/audit-logs">
+    查看系統操作紀錄與資料變更歷史
+  </Card>
+  
+  <Card title="操作記錄" icon="rotate-left" href="/features/operations-history">
+    查看和復原歷史操作
+  </Card>
+  
+  <Card title="批次匯入文檔" icon="file-lines" href="https://github.com/cbdb-project/cbdb-online-main-server/blob/main/docs/BATCH_UPLOADERS.md">
+    完整的批次匯入技術文檔（GitHub）
+  </Card>
+</CardGroup>

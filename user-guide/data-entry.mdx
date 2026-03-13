@@ -1,0 +1,321 @@
+---
+title: '資料錄入'
+description: '學習如何在 CBDB Online Input System 中建立和錄入歷史人物的傳記資料'
+icon: 'pen-to-square'
+---
+
+## 概述
+
+CBDB Online Input System 提供完整的資料錄入功能，允許您創建和編輯中國歷史人物的傳記資料。本指南將帶您了解從建立新人物記錄到添加詳細資訊的完整流程。
+
+## 建立人物基本資料
+
+### 開始建立新記錄
+
+<Steps>
+  <Step title="進入基本資料模組">
+    從主選單導航至「人物基本資料」頁面，點擊「新增」按鈕開始建立新的人物記錄。
+    
+    系統會自動分配一個臨時 Person ID（當前最大 ID + 1）。
+  </Step>
+  
+  <Step title="填寫基本識別資訊">
+    輸入人物的核心識別資訊：
+    
+    - **Person ID**：確認系統分配的 ID，或手動調整（需確保不與現有記錄重複）
+    - **中文姓名**：姓氏 + 名字（系統會自動合併為完整姓名）
+    - **英文拼音**：使用標準拼音系統
+    
+    <Warning>
+      Person ID 必須唯一且不能超過當前最大值 10,000 以上，否則系統會拒絕保存。
+    </Warning>
+  </Step>
+  
+  <Step title="選擇朝代和時期">
+    從下拉選單中選擇人物所屬的朝代（Dynasty），這是必填欄位，用於後續的時期分類和檢索。
+  </Step>
+  
+  <Step title="輸入生卒年資訊">
+    記錄人物的生卒年份及相關時間資訊：
+    
+    <Tabs>
+      <Tab title="西元年份">
+        - **出生年** (`c_birthyear`)：西元年份
+        - **卒年** (`c_deathyear`)：西元年份
+        - **index_year**：用於排序和檢索的基準年份
+      </Tab>
+      
+      <Tab title="年號紀年">
+        - **出生年號** (`c_by_nianhao`)：選擇對應的年號
+        - **年號年** (`c_by_nh_year`)：該年號的第幾年
+        - **卒年年號**：同上格式
+        - **閏月標記** (`c_by_intercalary`, `c_dy_intercalary`)：記錄是否為閏月
+      </Tab>
+      
+      <Tab title="年份範圍">
+        如果無法確定確切年份，可使用年份範圍代碼：
+        - `c_by_range`：出生年份範圍
+        - `c_dy_range`：卒年範圍
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step title="添加其他屬性">
+    根據需要填寫額外的人物屬性：
+    
+    - **性別** (`c_female`)：0 = 男性，1 = 女性，留空表示未知
+    - **族群** (`c_ethnicity_code`)：選擇對應的族群代碼
+    - **籍貫地址** (`c_choronym_id`)：人物的原籍地
+    - **備註** (`c_notes`)：任何需要記錄的補充資訊
+  </Step>
+  
+  <Step title="保存記錄">
+    檢查所有資訊無誤後，點擊「儲存」按鈕。
+    
+    <Accordion title="不同用戶角色的儲存行為">
+      - **一般用戶/專家用戶**：資料直接寫入資料庫，系統記錄操作日誌
+      - **眾包用戶**：提交的資料會建立為提案（`crowdsourcing_status = 2`），需等待專家審核後才會正式錄入
+    </Accordion>
+  </Step>
+</Steps>
+
+## 錄入詳細資訊
+
+建立基本記錄後，您可以為人物添加更豐富的傳記資訊。
+
+### 別名 (Alternate Names)
+
+人物可能有多個名字、字、號等。
+
+<CodeGroup>
+```plaintext 欄位說明
+c_alt_name_chn      # 中文別名
+c_alt_name          # 拼音別名
+c_alt_name_type_code # 別名類型（字、號、諡號等）
+c_sequence          # 排序序號
+c_source            # 來源文獻 ID
+c_pages             # 頁碼
+```
+</CodeGroup>
+
+**操作流程**：
+1. 進入人物編輯頁面
+2. 找到「別名」區塊，點擊「新增別名」
+3. 選擇別名類型（從 `ALTNAME_CODES` 代碼表）
+4. 輸入中文和拼音名稱
+5. 如有出處，填寫來源文獻和頁碼
+
+<Info>
+複合主鍵表（如 `ALTNAME_DATA`）使用 Query Builder 而非 Eloquent 模型，確保資料一致性。
+</Info>
+
+### 地址資訊 (Addresses)
+
+記錄人物與特定地點的關聯，如出生地、居住地、活動地等。
+
+**主要欄位**：
+- **地址 ID** (`c_addr_id`)：從地址代碼表選擇
+- **地址類型** (`c_addr_type`)：如籍貫、居住地、墓葬地等
+- **起止年份** (`c_firstyear`, `c_lastyear`)：人物與該地址關聯的時間段
+- **順序** (`c_sequence`)：多個地址的排序
+
+### 出處文獻 (Sources)
+
+關聯人物資料的文獻來源，建立可追溯的學術依據。
+
+```plaintext
+c_textid    # 文獻 ID（關聯 TEXT_CODES 表）
+c_pages     # 頁碼或章節
+c_source    # 來源備註
+```
+
+## 添加關係資料
+
+### 親屬關係 (Kinship)
+
+記錄人物的家族關係網絡。
+
+<Steps>
+  <Step title="選擇關係類型">
+    從 `KIN_CODES` 代碼表中選擇關係類型，如：
+    - 父子
+    - 兄弟姐妹
+    - 夫妻
+    - 母子
+  </Step>
+  
+  <Step title="指定關係人物">
+    輸入關係人物的 Person ID (`c_kin_id`)。系統會自動建立雙向關係。
+  </Step>
+  
+  <Step title="添加佐證資訊">
+    記錄來源文獻和備註，確保關係可追溯。
+  </Step>
+</Steps>
+
+<Warning>
+親屬關係表 (`KIN_DATA`) 使用複合主鍵 `(c_personid, c_kin_id, c_kin_code)`，系統會自動維護雙向關係的一致性。
+</Warning>
+
+### 社會關係 (Associations)
+
+記錄人物的社會交往、師承、政治聯盟等非血緣關係。
+
+**關係類型包括**：
+- 師生關係
+- 同年進士
+- 政治盟友/對手
+- 文學交遊
+- 商業合作
+
+**複雜關係欄位**：
+```plaintext
+c_assoc_id           # 關係對象 Person ID
+c_assoc_code         # 關係類型代碼
+c_kin_id             # （可選）透過某親屬的關係
+c_assoc_kin_id       # （可選）對方的某親屬
+c_tertiary_personid  # （可選）第三方中介者
+c_assoc_first_year   # 關係起始年份
+```
+
+### 任官資料 (Offices)
+
+記錄人物的官職履歷，這是 CBDB 的核心功能之一。
+
+<Accordion title="任官資料結構說明">
+  任官資料由三個關聯表組成：
+  - **POSTING_DATA**：任官主檔，記錄 Person ID 和 Posting ID
+  - **POSTED_TO_OFFICE_DATA**：具體職官資訊（官名、時間、來源）
+  - **POSTED_TO_ADDR_DATA**：該官職的任職地點（可多選）
+  
+  系統使用資料庫交易確保三表資料一致性。
+</Accordion>
+
+**錄入流程**：
+
+<Steps>
+  <Step title="建立任官記錄">
+    系統自動分配 Posting ID，並鎖定記錄避免衝突。
+  </Step>
+  
+  <Step title="選擇官職">
+    從 `OFFICE_CODES` 中選擇官名（`c_office_id`）。
+  </Step>
+  
+  <Step title="填寫任職時間">
+    - 起始年 (`c_firstyear`)
+    - 終止年 (`c_lastyear`)
+    - 年號紀年（如需要）
+  </Step>
+  
+  <Step title="選擇任職地點">
+    從地址列表中選擇一個或多個任職地（`c_addr_id`）。
+    
+    - 選擇「-999」表示地點未知（系統轉換為 `c_addr_id = 0`）
+    - 留空表示該官職無地理位置屬性
+  </Step>
+  
+  <Step title="添加輔助資訊">
+    - **任命類型** (`c_appoint_type`)：實授、遙領等
+    - **來源文獻**：記錄於 `c_source`、`c_pages`
+  </Step>
+</Steps>
+
+## 資料驗證
+
+系統在儲存時會執行多項驗證，確保資料品質。
+
+### 自動驗證規則
+
+<CardGroup cols={2}>
+  <Card title="必填欄位檢查" icon="circle-exclamation">
+    - Person ID 必須填寫且唯一
+    - 中文姓名必填
+    - 朝代必選
+  </Card>
+  
+  <Card title="數值範圍驗證" icon="ruler">
+    - Person ID 不可超過當前最大值 10,000 以上
+    - 年份需為合理範圍（-9999 ~ 9999）
+    - 性別欄位僅接受 0、1 或 NULL
+  </Card>
+  
+  <Card title="關聯完整性" icon="link">
+    - 外鍵 ID 必須存在於對應的代碼表
+    - 關係人物的 Person ID 必須有效
+    - 文獻 ID 需存在於 TEXT_CODES
+  </Card>
+  
+  <Card title="複合主鍵唯一性" icon="key">
+    - 別名、地址等子資料的複合主鍵不可重複
+    - 系統自動檢查衝突並提示調整
+  </Card>
+</CardGroup>
+
+### 驗證失敗處理
+
+當驗證失敗時，系統會：
+1. **顯示錯誤訊息**：清楚標示哪個欄位不符合要求
+2. **保留已填寫資料**：返回表單時保留您的輸入
+3. **建議修正方向**：提供可能的解決方案
+
+<Note>
+如遇到驗證問題無法解決，請聯繫系統管理員或查閱 [疑難排解指南](/user-guide/managing-records)。
+</Note>
+
+## 資料錄入最佳實踐
+
+<AccordionGroup>
+  <Accordion title="確保資料來源可追溯">
+    為所有資料項添加明確的文獻出處（`c_source`、`c_pages`），便於後續驗證和學術引用。
+  </Accordion>
+  
+  <Accordion title="使用標準化代碼">
+    盡量從系統提供的代碼表中選擇，避免自由文字輸入導致資料不一致。如需新代碼，請透過 [代碼表管理](/user-guide/managing-records#代碼表維護) 提出申請。
+  </Accordion>
+  
+  <Accordion title="分階段完善資料">
+    先建立基本記錄（姓名、朝代、基本年份），再逐步添加詳細資訊。這樣可以避免一次性輸入過多資料導致錯誤。
+  </Accordion>
+  
+  <Accordion title="定期檢查關係一致性">
+    對於親屬和社會關係，確認雙向記錄的一致性。系統提供 [單向關係修復工具](/admin/user-management) 協助管理員維護資料品質。
+  </Accordion>
+  
+  <Accordion title="善用提案功能">
+    如不確定資料準確性，可使用「提交提案」功能，讓專家審核後再正式錄入。
+  </Accordion>
+</AccordionGroup>
+
+## 批次操作
+
+對於大量資料錄入，系統提供批次匯入功能（需專家或系統管理員權限）。
+
+<Warning>
+批次操作功能強大但風險較高，使用前請務必詳閱 [批次上傳指南](https://github.com/cbdb-project/cbdb-online-main-server/blob/main/docs/BATCH_UPLOADERS.md)。
+</Warning>
+
+**支援的批次操作**：
+- 書名批次載入：`/admin/batch-load-book-titles`
+- 社會機構批次載入：`/admin/batch-load-social-institutes`
+- 官職批次載入：`/admin/batch-load-offices`
+
+## 相關資源
+
+<CardGroup cols={2}>
+  <Card title="管理記錄" icon="folder-tree" href="/user-guide/managing-records">
+    學習如何編輯、刪除和管理現有記錄
+  </Card>
+  
+  <Card title="搜尋查詢" icon="magnifying-glass" href="/user-guide/search-query">
+    了解如何高效檢索人物資料
+  </Card>
+  
+  <Card title="用戶角色" icon="users" href="/user-guide/user-roles">
+    了解不同角色的權限差異
+  </Card>
+  
+  <Card title="API 參考" icon="code" href="/api/overview">
+    透過 API 進行程式化資料錄入
+  </Card>
+</CardGroup>

@@ -1,0 +1,366 @@
+---
+title: "Operations History & Audit Trail"
+description: "Complete tracking system for all data modifications with restoration capabilities and audit logging"
+---
+
+## Overview
+
+CBDB Online maintains a comprehensive operations history that tracks every create, update, and delete action performed on biographical data. This audit trail enables transparency, accountability, and the ability to restore previous versions of records.
+
+## Operations Table Structure
+
+All operations are recorded in the `operations` table:
+
+```sql
+CREATE TABLE operations (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    op_type INT NOT NULL,              -- Operation type code
+    table_name VARCHAR(50) NOT NULL,    -- Affected table
+    resource_id VARCHAR(100) NOT NULL,  -- Resource identifier
+    resource_data JSON,                 -- Before/after data
+    actor VARCHAR(50),                  -- User who performed action
+    actor_id INT,                       -- User ID
+    notes TEXT,                         -- Additional information
+    created_at TIMESTAMP,               -- When operation occurred
+    updated_at TIMESTAMP
+);
+```
+
+## Operation Types
+
+The system tracks four main operation types:
+
+<CardGroup cols={2}>
+  <Card title="Create (1)" icon="plus">
+    New record creation - stores initial data
+  </Card>
+  <Card title="Overwrite (2)" icon="arrows-rotate">
+    Complete record replacement
+  </Card>
+  <Card title="Modify (3)" icon="pen-to-square">
+    Partial record update - stores before/after values
+  </Card>
+  <Card title="Delete (4)" icon="trash">
+    Record deletion - preserves final state
+  </Card>
+</CardGroup>
+
+### Operation Type Codes
+
+```php
+// From OperationRepository
+const CREATE = 1;
+const OVERWRITE = 2;
+const MODIFY = 3;
+const DELETE = 4;
+```
+
+## Tracked Operations
+
+Operations are automatically recorded for all major data changes:
+
+<Accordion title="BIOG_MAIN (Biographical Records)">
+- Create new person
+- Update basic information
+- Delete person record
+</Accordion>
+
+<Accordion title="ALTNAME_DATA (Alternate Names)">
+- Add new name
+- Modify existing name
+- Delete name
+</Accordion>
+
+<Accordion title="BIOG_ADDR_DATA (Addresses)">
+- Add address
+- Update address
+- Remove address
+</Accordion>
+
+<Accordion title="POSTING_DATA / POSTED_TO_OFFICE_DATA / POSTED_TO_ADDR_DATA">
+- Create office posting (all three tables)
+- Update posting details
+- Delete posting with addresses
+</Accordion>
+
+<Accordion title="KIN_DATA (Kinship Relationships)">
+- Add kinship relationship
+- Modify relationship
+- Delete relationship
+</Accordion>
+
+<Accordion title="ASSOC_DATA (Social Associations)">
+- Create association
+- Update association
+- Remove association
+</Accordion>
+
+## Resource Data Structure
+
+The `resource_data` JSON field contains different information based on operation type:
+
+### Create Operation
+
+```json
+{
+  "after": {
+    "c_personid": 12345,
+    "c_name_chn": "王安石",
+    "c_index_year": 1021
+  }
+}
+```
+
+### Modify Operation
+
+```json
+{
+  "before": {
+    "c_name_chn": "王安石",
+    "c_index_year": 1020
+  },
+  "after": {
+    "c_name_chn": "王安石",
+    "c_index_year": 1021
+  }
+}
+```
+
+### Delete Operation
+
+```json
+{
+  "before": {
+    "c_personid": 12345,
+    "c_name_chn": "王安石",
+    "c_index_year": 1021
+  }
+}
+```
+
+### Office Posting with Addresses
+
+For complex multi-table operations:
+
+```json
+{
+  "before": {
+    "c_office_id": 920,
+    "c_firstyear": 1070,
+    "rows": [
+      {"c_addr_id": 10522},
+      {"c_addr_id": 12553}
+    ]
+  },
+  "after": {
+    "c_office_id": 920,
+    "c_firstyear": 1071,
+    "rows": [
+      {"c_addr_id": 10522}
+    ]
+  }
+}
+```
+
+<Note>
+The `rows` array in office postings represents the associated addresses in `POSTED_TO_ADDR_DATA`, preserved as JSON for audit purposes.
+</Note>
+
+## Viewing Operations History
+
+Access the operations history through the web interface:
+
+<Steps>
+  <Step title="Navigate to Operations Page">
+    Go to `/operations` in the CBDB Online interface
+  </Step>
+  
+  <Step title="Filter Operations">
+    Use filters to narrow down operations:
+    - Table name
+    - Operation type
+    - User/actor
+    - Date range
+    - Resource ID
+  </Step>
+  
+  <Step title="View Operation Details">
+    Click on any operation to see:
+    - Full before/after JSON data
+    - User who performed the action
+    - Timestamp
+    - Notes
+  </Step>
+</Steps>
+
+## Restoration Feature
+
+<Warning>
+**Admin Only**: Only active administrators (`is_active = 1` AND `is_admin = 1`) can restore previous versions.
+</Warning>
+
+### How Restoration Works
+
+When an admin restores a previous version:
+
+<Steps>
+  <Step title="Admin Clicks Restore">
+    From the operations history, admin selects "復原" (Restore)
+  </Step>
+  
+  <Step title="Confirmation Dialog">
+    System shows:
+    > "將以你的名義對該資源進行一次修改，恢復至本次改動之前，是否繼續？"
+    > (This will modify the resource in your name to restore it to the state before this change. Continue?)
+  </Step>
+  
+  <Step title="Restoration Executed">
+    System:
+    1. Reads the `before` data from the operation
+    2. Applies it to the current record
+    3. Creates a new operation record (type = 3, MODIFY)
+    4. Records the admin's name as the actor
+  </Step>
+  
+  <Step title="New Operation Logged">
+    The restoration itself creates a new operation entry showing:
+    - `before`: Current state
+    - `after`: Restored state
+    - `actor`: Admin who performed restoration
+  </Step>
+</Steps>
+
+### Restoration Example
+
+```php
+// From OperationsController::restore()
+public function restore($id) {
+    $operation = Operation::findOrFail($id);
+    
+    // Only admin can restore
+    if (!auth()->user()->isAdmin()) {
+        abort(403);
+    }
+    
+    // Get the "before" state
+    $beforeData = $operation->resource_data['before'];
+    
+    // Apply restoration
+    DB::table($operation->table_name)
+        ->where('resource_id', $operation->resource_id)
+        ->update($beforeData);
+    
+    // Log restoration as new operation
+    OperationRepository::store(
+        op_type: 3, // MODIFY
+        table_name: $operation->table_name,
+        resource_id: $operation->resource_id,
+        resource_data: [
+            'before' => 'current state',
+            'after' => $beforeData
+        ]
+    );
+}
+```
+
+## Implementation Details
+
+### Recording Operations
+
+Use the `OperationRepository` to record operations:
+
+```php
+use App\Repositories\OperationRepository;
+
+// Create operation
+OperationRepository::store(
+    op_type: OperationRepository::CREATE,
+    table_name: 'BIOG_MAIN',
+    resource_id: '12345',
+    resource_data: ['after' => $newData]
+);
+
+// Modify operation
+OperationRepository::store(
+    op_type: OperationRepository::MODIFY,
+    table_name: 'BIOG_MAIN',
+    resource_id: '12345',
+    resource_data: [
+        'before' => $oldData,
+        'after' => $newData
+    ]
+);
+
+// Delete operation
+OperationRepository::store(
+    op_type: OperationRepository::DELETE,
+    table_name: 'BIOG_MAIN',
+    resource_id: '12345',
+    resource_data: ['before' => $deletedData]
+);
+```
+
+### Automatic Tracking
+
+Operations are automatically tracked in repositories:
+
+```php
+// From BiogMainRepository
+public function officeUpdateById($personId, $pk, array $data) {
+    DB::transaction(function() use ($personId, $pk, $data) {
+        // Get current state
+        $before = $this->getOfficeData($personId, $pk);
+        
+        // Update office
+        $this->updateOffice($personId, $pk, $data);
+        
+        // Get new state
+        $after = $this->getOfficeData($personId, $pk);
+        
+        // Record operation
+        OperationRepository::store(
+            op_type: OperationRepository::MODIFY,
+            table_name: 'POSTED_TO_OFFICE_DATA',
+            resource_id: "{$pk['c_office_id']}-{$pk['c_posting_id']}",
+            resource_data: [
+                'before' => $before,
+                'after' => $after
+            ]
+        );
+    });
+}
+```
+
+## Benefits
+
+<CardGroup cols={2}>
+  <Card title="Accountability" icon="user-check">
+    Every change is attributed to a specific user
+  </Card>
+  <Card title="Transparency" icon="eye">
+    Full audit trail of all modifications
+  </Card>
+  <Card title="Recovery" icon="trash-arrow-up">
+    Restore accidentally deleted or modified data
+  </Card>
+  <Card title="Compliance" icon="shield-check">
+    Meet data governance and audit requirements
+  </Card>
+</CardGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Managing Records" icon="list-check" href="/user-guide/managing-records">
+    Learn how to edit and update records
+  </Card>
+  <Card title="Audit Logs" icon="book" href="/admin/audit-logs">
+    Admin audit logging and monitoring
+  </Card>
+  <Card title="User Roles" icon="users" href="/user-guide/user-roles">
+    Understand permission levels and access control
+  </Card>
+  <Card title="Biographical Data" icon="database" href="/features/biographical-data">
+    Complete data structure reference
+  </Card>
+</CardGroup>

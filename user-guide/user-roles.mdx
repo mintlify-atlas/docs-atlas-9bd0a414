@@ -1,0 +1,653 @@
+---
+title: '用戶角色與權限'
+description: '了解 CBDB Online Input System 中不同用戶角色的功能權限和使用場景'
+icon: 'users'
+---
+
+## 概述
+
+CBDB Online Input System 實施分層權限管理，根據用戶的角色和啟用狀態，提供不同層級的資料操作權限。本指南詳細說明各角色的能力與限制。
+
+## 帳號啟用狀態
+
+所有用戶必須先被啟用才能執行資料寫入操作。
+
+<Tabs>
+  <Tab title="未啟用 (is_active = 0)">
+    **狀態說明**：
+    - 預設狀態，或被管理員停用的帳號
+    - 可以登入系統
+    - 可以瀏覽資料（唯讀模式）
+    
+    **限制**：
+    - ❌ 無法新增、修改或刪除任何資料
+    - ❌ 無法提交提案
+    - ❌ 所有寫入動作會被 Controller 拒絕
+    
+    <Warning>
+    新註冊用戶預設為未啟用狀態，需等待管理員審核並啟用帳號。
+    </Warning>
+  </Tab>
+  
+  <Tab title="已啟用 (is_active = 1)">
+    **狀態說明**：
+    - 經管理員審核通過的正式用戶
+    - 具備基本資料操作能力
+    - 權限範圍由角色 (`is_admin`) 決定
+    
+    **能力**：
+    - ✅ 根據角色執行資料新增/修改
+    - ✅ 提交審核提案
+    - ✅ 查看自己的操作歷史
+  </Tab>
+  
+  <Tab title="預留狀態 (is_active = 2)">
+    **狀態說明**：
+    - Migration 註解為「寄送激活郵件」
+    - 目前系統視同未啟用
+    - 保留供未來功能擴展使用
+    
+    **實際行為**：與未啟用狀態相同，無寫入權限。
+  </Tab>
+</Tabs>
+
+## 用戶角色體系
+
+CBDB 定義四種用戶角色，由 `users.is_admin` 欄位標識。
+
+### 角色常量定義
+
+<CodeGroup>
+```php User 模型常量
+User::ROLE_REGULAR        = 0  // 一般用戶
+User::ROLE_EXPERT         = 1  // 專家用戶
+User::ROLE_CROWDSOURCING  = 2  // 眾包用戶
+User::ROLE_SUPER_ADMIN    = 3  // 系統管理員
+```
+</CodeGroup>
+
+### 一般用戶 (Regular User)
+
+<Card title="定位" icon="user">
+**角色代碼**：`is_admin = 0`
+
+**典型使用者**：研究助理、數據錄入員、一般研究者
+</Card>
+
+#### 核心權限
+
+<AccordionGroup>
+  <Accordion title="基本資料操作">
+    ✅ **可執行的操作**：
+    - 新增人物基本資料 (`/basicinformation`)
+    - 編輯現有人物記錄
+    - 添加別名、地址、關係等子資源
+    - 刪除記錄（軟刪除，標記為 `<待删除>`）
+    
+    **特點**：
+    - 所有變更直接寫入資料庫
+    - 系統自動記錄操作日誌 (`operations` 表)
+    - 支援提案模式（可選）
+  </Accordion>
+  
+  <Accordion title="代碼表維護">
+    ✅ **可執行的操作**：
+    - 瀏覽各類代碼表 (`/codes/{table}`)
+    - 新增代碼條目（直接儲存或提交提案）
+    - 編輯現有代碼
+    
+    ❌ **限制**：
+    - 無法編輯內部表格（`CBDB__` 前綴）
+    - 重大代碼變更建議使用提案模式
+  </Accordion>
+  
+  <Accordion title="檢視表查詢">
+    ✅ **可執行的操作**：
+    - 存取所有檢視表 (`/view`)
+    - 使用進階搜尋和篩選
+    - 匯出查詢結果
+  </Accordion>
+</AccordionGroup>
+
+#### 無法執行的操作
+
+<Warning>
+❌ 審核提案  
+❌ 復原操作  
+❌ 管理用戶帳號  
+❌ 執行批次匯入  
+❌ 存取管理工具
+</Warning>
+
+### 專家用戶 (Expert User)
+
+<Card title="定位" icon="user-graduate">
+**角色代碼**：`is_admin = 1`
+
+**典型使用者**：資深研究員、學科專家、資料審核人員
+</Card>
+
+#### 核心權限
+
+專家用戶擁有一般用戶的所有權限，另外新增：
+
+<CardGroup cols={2}>
+  <Card title="提案審核" icon="clipboard-check">
+    **功能路徑**：`/operations`
+    
+    ✅ 核准或退回提案  
+    ✅ 查看所有用戶的提案  
+    ✅ 添加審核備註
+  </Card>
+  
+  <Card title="操作復原" icon="clock-rotate-left">
+    **功能路徑**：`/operations/{operation}/restore`
+    
+    ✅ 復原誤操作的資料變更  
+    ✅ 以自己名義建立復原記錄  
+    ✅ 查看完整操作歷史
+  </Card>
+  
+  <Card title="用戶管理" icon="users-gear">
+    **功能路徑**：`/manage`
+    
+    ✅ 查看所有用戶列表  
+    ✅ 啟用/停用用戶帳號  
+    ✅ 調整用戶角色（除系統管理員）
+  </Card>
+  
+  <Card title="管理工具" icon="wrench">
+    ✅ 合併預覽 (`/merge-preview`)  
+    ✅ 眾包審核 (`/crowdsourcing`)  
+    ✅ 批次匯入功能  
+    ✅ 執行 SQL 分析 (`/admin/explainsql`)
+  </Card>
+</CardGroup>
+
+#### 提案審核流程
+
+<Steps>
+  <Step title="檢視待審核提案">
+    訪問 `/operations?proposals_only=1` 查看所有待審核提案。
+    
+    提案卡片顯示：
+    - 提案者姓名和 ID
+    - 提交時間
+    - 操作類型（新增/修改）
+    - 目標資料表和主鍵
+    - 變更內容對比
+  </Step>
+  
+  <Step title="審核決策">
+    <Tabs>
+      <Tab title="核准提案">
+        點擊「核准」按鈕後，系統會：
+        1. 執行資料變更（INSERT 或 UPDATE）
+        2. 更新提案狀態為 `approved`
+        3. 記錄審核者和時間
+        4. 新增正式操作記錄（`op_type = 1/3`）
+        5. 寫入審計日誌
+        
+        **主鍵衝突處理**：如核准時發現主鍵已被使用，系統會拒絕並提示重新修改提案。
+      </Tab>
+      
+      <Tab title="退回提案">
+        點擊「退回」按鈕：
+        1. 填寫退回原因（必填）
+        2. 提案狀態改為 `rejected`
+        3. 不修改原資料表
+        4. 提案者可查看退回意見並重新提交
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step title="後續追蹤">
+    審核後的提案會顯示審核狀態徽章，便於追蹤處理進度。
+  </Step>
+</Steps>
+
+#### 操作復原權限
+
+<Accordion title="復原條件與限制">
+  **可復原的操作**：
+  - ✅ 修改操作（`op_type = 3`）
+  - ✅ 存在 `resource_original` 資料
+  - ✅ 目標資源仍存在於資料庫
+  
+  **暫停復原的資源**：
+  - ❌ 任官記錄的地址清單（`POSTED_TO_ADDR_DATA`）
+  - ❌ 刪除操作（需透過其他方式恢復）
+  
+  **復原機制**：
+  - 將資料回滾到 `resource_original` 的狀態
+  - 以執行者名義新增 `op_type = 7` 記錄
+  - 觸發名稱搜尋索引更新（如適用）
+</Accordion>
+
+### 眾包用戶 (Crowdsourcing User)
+
+<Card title="定位" icon="users">
+**角色代碼**：`is_admin = 2`
+
+**典型使用者**：公眾貢獻者、志願研究者、非專業錄入員
+</Card>
+
+#### 工作模式
+
+眾包用戶的所有資料變更都透過提案機制，不會直接修改資料庫。
+
+<Steps>
+  <Step title="提交資料變更">
+    眾包用戶執行編輯操作時，Controller 會偵測 `is_admin == 2`：
+    
+    ```php
+    if (Auth::user()->isCrowdsourcingUser()) {
+        // 建立提案而非直接儲存
+        $this->operationRepository->store(
+            Auth::id(), 
+            $personId, 
+            1, // op_type
+            'BIOG_MAIN', 
+            $resourceId, 
+            $data, 
+            '', 
+            2  // crowdsourcing_status = 2
+        );
+        flash('眾包紀錄 Create success', 'success');
+    }
+    ```
+  </Step>
+  
+  <Step title="等待專家審核">
+    提案會出現在 `/operations` 和 `/crowdsourcing` 介面，等待專家審核。
+    
+    提案包含完整的變更內容和提案者資訊。
+  </Step>
+  
+  <Step title="專家核准或退回">
+    專家審核後：
+    - **核准**：資料正式寫入資料庫（`op_type = 5`）
+    - **退回**：標記為 `crowdsourcing_status = 6`，附審核意見
+  </Step>
+  
+  <Step title="查看審核結果">
+    眾包用戶可在 `/crowdsourcing` 查看自己提案的審核狀態和專家意見。
+  </Step>
+</Steps>
+
+#### 權限範圍
+
+<CardGroup cols={2}>
+  <Card title="✅ 可執行" icon="check">
+    - 瀏覽所有資料（唯讀）
+    - 提交新增人物提案
+    - 提交修改資料提案
+    - 提交刪除資料提案
+    - 查看自己的提案狀態
+  </Card>
+  
+  <Card title="❌ 無法執行" icon="xmark">
+    - 直接寫入資料庫
+    - 審核其他人的提案
+    - 復原操作
+    - 管理用戶帳號
+    - 執行批次操作
+  </Card>
+</CardGroup>
+
+<Info>
+眾包模式確保公眾貢獻的資料經過專業審核，維護資料庫的學術品質。
+</Info>
+
+### 系統管理員 (Super Admin)
+
+<Card title="定位" icon="user-shield">
+**角色代碼**：`is_admin = 3`
+
+**典型使用者**：系統開發者、資料庫管理員、專案負責人
+</Card>
+
+#### 核心權限
+
+系統管理員擁有最高權限，包括專家用戶的所有能力，並額外支援系統層級的操作。
+
+<CardGroup cols={2}>
+  <Card title="基礎權限" icon="shield-halved">
+    ✅ 所有專家用戶權限  
+    ✅ 透過 `isAdmin()` 方法識別  
+    ✅ 使用 `isSuperAdmin()` 區分專屬功能
+  </Card>
+  
+  <Card title="系統維護" icon="screwdriver-wrench">
+    ✅ 維基數據匯入 (`/admin/wiki-maintenance`)  
+    ✅ 資料表維護 (`/admin/cbdb-table-maintenance`)  
+    ✅ 關係修復工具  
+    ✅ 審計日誌查看 (`/admin/audit-logs`)
+  </Card>
+  
+  <Card title="進階工具" icon="terminal">
+    ✅ SQL 查詢遊樂場 (`/query-playground`)  
+    ✅ AI 填充日誌  
+    ✅ 批次載入工具  
+    ✅ 指標監控 (`/metrics`)
+  </Card>
+  
+  <Card title="命令行操作" icon="code">
+    ✅ 執行 Artisan 命令  
+    ✅ 直接資料庫操作  
+    ✅ 部署和維護作業
+  </Card>
+</CardGroup>
+
+#### 建立系統管理員
+
+<Tabs>
+  <Tab title="命令行建立">
+    使用 `cbdb:manage-user` 命令：
+    
+    ```bash
+    php artisan cbdb:manage-user \
+      --email=admin@cbdb.fas.harvard.edu \
+      --name="系統管理員" \
+      --password=securepassword \
+      --active=1 \
+      --role=super-admin
+    ```
+    
+    **參數說明**：
+    - `--active=1`：立即啟用帳號
+    - `--role=super-admin`：指定為系統管理員角色
+  </Tab>
+  
+  <Tab title="測試環境建立">
+    在測試中使用 Factory：
+    
+    ```php
+    use App\Models\User;
+    
+    // 建立活躍的系統管理員
+    $superAdmin = User::factory()
+        ->active()
+        ->superAdmin()
+        ->create();
+    
+    // 驗證權限
+    $this->assertTrue($superAdmin->isSuperAdmin());
+    $this->assertTrue($superAdmin->isAdmin());
+    $this->assertTrue($superAdmin->canManageUsers());
+    ```
+  </Tab>
+</Tabs>
+
+#### 系統管理員專屬功能（示例）
+
+<CodeGroup>
+```php Controller 權限檢查
+// 僅限系統管理員的功能
+public function dangerousOperation() {
+    if (!Auth::user()->isSuperAdmin()) {
+        flash('該功能僅限系統管理員使用。', 'error');
+        return redirect()->back();
+    }
+    
+    // 執行系統層級操作
+}
+```
+
+```php Blade 模板顯示
+@if(Auth::user()->isSuperAdmin())
+    <a href="{{ route('admin.dangerous-tool') }}" class="btn btn-danger">
+        <i class="fas fa-exclamation-triangle"></i>
+        系統層級工具
+    </a>
+@endif
+```
+</CodeGroup>
+
+## 權限檢查方法
+
+`User` 模型提供豐富的輔助方法，簡化權限判斷邏輯。
+
+### 角色檢查
+
+<CodeGroup>
+```php 基本角色檢查
+// 檢查是否為活躍用戶
+if (Auth::user()->isActive()) {
+    // 可執行寫入操作
+}
+
+// 檢查是否為管理員（專家或系統管理員）
+if (Auth::user()->isAdmin()) {
+    // 可審核提案、復原操作
+}
+
+// 檢查特定角色
+if (Auth::user()->isExpert()) {
+    // 專家專屬功能
+}
+
+if (Auth::user()->isSuperAdmin()) {
+    // 系統管理員專屬功能
+}
+
+if (Auth::user()->isCrowdsourcingUser()) {
+    // 轉向提案流程
+}
+
+if (Auth::user()->isRegularUser()) {
+    // 一般用戶流程
+}
+```
+</CodeGroup>
+
+### 權限能力檢查
+
+<CodeGroup>
+```php 功能權限檢查
+// 檢查是否可管理用戶
+if (Auth::user()->canManageUsers()) {
+    // 進入 /manage 頁面
+}
+
+// 檢查是否可復原操作
+if (Auth::user()->canRestoreOperations()) {
+    // 顯示復原按鈕
+}
+
+// 檢查是否可直接寫入（非眾包）
+if (Auth::user()->canWriteDirectly()) {
+    // 直接儲存到資料庫
+} else {
+    // 建立提案
+}
+
+// 檢查是否可執行批次匯入
+if (Auth::user()->canRunBatchImport()) {
+    // 允許存取批次工具
+}
+```
+</CodeGroup>
+
+### 取得角色名稱
+
+<CodeGroup>
+```php 顯示角色
+// 在 Blade 模板中
+<span class="badge badge-info">
+    {{ Auth::user()->getRoleName() }}
+</span>
+
+// 在 Controller 中
+$roleName = $user->getRoleName();
+// 返回：「一般」、「專家」、「眾包」、「系統管理員」
+```
+</CodeGroup>
+
+## 權限對比表
+
+<Tabs>
+  <Tab title="基本操作">
+    | 功能 | 一般 | 專家 | 眾包 | 系統管理員 |
+    |------|------|------|------|------------|
+    | 新增人物基本資料 | ✅ 直接 | ✅ 直接 | 📝 提案 | ✅ 直接 |
+    | 編輯現有記錄 | ✅ 直接 | ✅ 直接 | 📝 提案 | ✅ 直接 |
+    | 刪除記錄 | ✅ 直接 | ✅ 直接 | 📝 提案 | ✅ 直接 |
+    | 編輯代碼表 | ✅ | ✅ | 📝 提案 | ✅ |
+    | 查看檢視表 | ✅ | ✅ | ✅ | ✅ |
+    | 提交提案（可選） | ✅ | ✅ | ✅ 強制 | ✅ |
+  </Tab>
+  
+  <Tab title="管理功能">
+    | 功能 | 一般 | 專家 | 眾包 | 系統管理員 |
+    |------|------|------|------|------------|
+    | 審核提案 | ❌ | ✅ | ❌ | ✅ |
+    | 核准/退回提案 | ❌ | ✅ | ❌ | ✅ |
+    | 復原操作 | ❌ | ✅ | ❌ | ✅ |
+    | 管理用戶帳號 | ❌ | ✅ | ❌ | ✅ |
+    | 眾包審核 | ❌ | ✅ | ❌ | ✅ |
+    | 合併預覽 | ❌ | ✅ | ❌ | ✅ |
+  </Tab>
+  
+  <Tab title="進階工具">
+    | 功能 | 一般 | 專家 | 眾包 | 系統管理員 |
+    |------|------|------|------|------------|
+    | 批次匯入 | ❌ | ✅ | ❌ | ✅ |
+    | SQL 查詢遊樂場 | ❌ | ✅ | ❌ | ✅ |
+    | 維基數據匯入 | ❌ | ❌ | ❌ | ✅ |
+    | 資料表維護 | ❌ | ❌ | ❌ | ✅ |
+    | 關係修復工具 | ❌ | ❌ | ❌ | ✅ |
+    | 審計日誌查看 | ❌ | ❌ | ❌ | ✅ |
+    | AI 填充日誌 | ❌ | ❌ | ❌ | ✅ |
+  </Tab>
+</Tabs>
+
+## 角色升級流程
+
+### 申請升級權限
+
+<Steps>
+  <Step title="提交申請">
+    用戶聯繫專案管理員，說明需要升級權限的原因和用途。
+  </Step>
+  
+  <Step title="管理員審核">
+    專家或系統管理員登入 `/manage` 頁面，審核申請。
+  </Step>
+  
+  <Step title="調整角色">
+    管理員編輯用戶資料：
+    - 修改 `is_admin` 欄位
+    - 確認 `is_active = 1`
+    - 保存變更
+  </Step>
+  
+  <Step title="通知用戶">
+    通知用戶權限已更新，需重新登入使新角色生效。
+  </Step>
+</Steps>
+
+### 命令行調整權限
+
+系統管理員可使用命令快速調整用戶角色：
+
+```bash
+# 提升為專家用戶
+php artisan cbdb:manage-user \
+  --email=user@example.com \
+  --role=expert
+
+# 降級為一般用戶
+php artisan cbdb:manage-user \
+  --email=expert@example.com \
+  --role=regular
+
+# 啟用帳號
+php artisan cbdb:manage-user \
+  --email=user@example.com \
+  --active=1
+```
+
+## 安全性最佳實踐
+
+<CardGroup cols={2}>
+  <Card title="最小權限原則" icon="shield-halved">
+    僅授予用戶完成工作所需的最低權限。定期審核用戶角色，移除不再需要的高級權限。
+  </Card>
+  
+  <Card title="操作可追溯性" icon="fingerprint">
+    所有資料變更都記錄在 `operations` 表和 `audit_log` 表，確保操作可追溯到具體用戶和時間。
+  </Card>
+  
+  <Card title="提案雙重審核" icon="user-check">
+    對於重大資料變更，即使是專家用戶也建議使用提案模式，由其他專家審核。
+  </Card>
+  
+  <Card title="定期密碼更新" icon="key">
+    要求用戶定期更新密碼，尤其是擁有管理員權限的帳號。
+  </Card>
+</CardGroup>
+
+<Warning>
+系統管理員帳號權限極高，務必妥善保管憑證。建議使用強密碼並啟用雙因素認證（如系統支援）。
+</Warning>
+
+## 常見問題
+
+<AccordionGroup>
+  <Accordion title="新用戶無法編輯資料怎麼辦？">
+    檢查帳號啟用狀態。新註冊用戶預設為 `is_active = 0`，需要管理員在 `/manage` 頁面啟用帳號。
+    
+    確認方法：
+    ```sql
+    SELECT name, email, is_active, is_admin FROM users WHERE email = 'user@example.com';
+    ```
+  </Accordion>
+  
+  <Accordion title="眾包用戶可以查看所有資料嗎？">
+    可以。眾包用戶可以瀏覽所有人物資料和檢視表，但所有修改都需透過提案機制，不能直接寫入資料庫。
+  </Accordion>
+  
+  <Accordion title="專家用戶和系統管理員的主要區別是什麼？">
+    在基礎功能上兩者相同，都可以審核提案、復原操作、管理用戶。系統管理員額外擁有系統層級的維護工具，如資料表重建、維基匯入等。
+    
+    使用 `isSuperAdmin()` 方法可以區分專屬於系統管理員的功能。
+  </Accordion>
+  
+  <Accordion title="如何批次調整多個用戶的角色？">
+    目前需逐一調整，或由系統管理員透過 SQL 直接更新：
+    
+    ```sql
+    -- 謹慎操作！
+    UPDATE users 
+    SET is_admin = 1, is_active = 1 
+    WHERE email IN ('user1@example.com', 'user2@example.com');
+    ```
+    
+    建議使用命令行工具配合腳本自動化處理。
+  </Accordion>
+  
+  <Accordion title="誤將用戶升級為管理員怎麼辦？">
+    立即在 `/manage` 頁面將該用戶降級回原角色。查看 `operations` 表確認該用戶在管理員期間是否執行了不當操作，必要時復原相關變更。
+  </Accordion>
+</AccordionGroup>
+
+## 相關資源
+
+<CardGroup cols={2}>
+  <Card title="資料錄入" icon="pen-to-square" href="/user-guide/data-entry">
+    了解不同角色的資料錄入流程
+  </Card>
+  
+  <Card title="管理記錄" icon="folder-tree" href="/user-guide/managing-records">
+    學習提案審核和操作復原
+  </Card>
+  
+  <Card title="帳號管理" icon="user-gear" href="/admin/user-management">
+    管理員操作指南
+  </Card>
+  
+  <Card title="API 認證" icon="key" href="/api/authentication">
+    API Token 權限管理
+  </Card>
+</CardGroup>

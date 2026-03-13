@@ -1,0 +1,531 @@
+---
+title: 審計日誌
+description: 查看系統操作紀錄、資料變更歷史與監控指標
+---
+
+審計日誌功能提供完整的系統操作追蹤與監控，記錄所有資料變更、用戶操作和系統事件。結合 Prometheus metrics，可全面掌握系統運作狀態。
+
+<Warning>
+  **權限要求**
+  
+  審計日誌查看功能目前僅限系統管理員（`is_admin = 3`）使用。專家用戶可透過 **操作記錄** 頁面查看資料變更歷史。
+</Warning>
+
+## 審計日誌系統架構
+
+CBDB Online 的審計追蹤系統分為兩層：
+
+<CardGroup cols={2}>
+  <Card title="Operations 表" icon="database">
+    記錄所有資料表的 CRUD 操作，包含完整的 before/after JSON 快照。可供所有專家和系統管理員查看與復原。
+  </Card>
+  
+  <Card title="Audit Log 表" icon="shield-halved">
+    記錄更詳細的操作日誌與系統事件。目前僅限系統管理員查看（未來可擴展記錄範圍）。
+  </Card>
+</CardGroup>
+
+## AdminAuditLogController 功能
+
+### 功能概述
+
+`AdminAuditLogController` 提供審計日誌的查詢介面，支援：
+- 按資料表名稱篩選
+- 按操作類型篩選（INSERT、UPDATE、DELETE）
+- 按執行者類型和 ID 篩選
+- 關鍵字搜尋（operation_id、row_pk_text、table_name）
+- 分頁顯示（每頁 20 筆）
+
+### 訪問審計日誌
+
+<Steps>
+  <Step title="確認權限">
+    使用系統管理員帳號登入。若非系統管理員，會顯示 403 錯誤。
+  </Step>
+  
+  <Step title="前往審計日誌頁面">
+    目前需手動訪問路由 `/admin/audit-logs`（未來可加入側欄導航）。
+  </Step>
+  
+  <Step title="使用篩選功能">
+    使用頁面上的篩選器縮小查詢範圍：
+    - **資料表名稱**：選擇特定資料表（如 `BIOG_MAIN`、`TEXT_CODES`）
+    - **操作類型**：選擇 INSERT、UPDATE 或 DELETE
+    - **執行者類型**：選擇執行者身份（如 user、system）
+    - **執行者 ID**：輸入特定用戶 ID
+    - **關鍵字搜尋**：搜尋 operation_id、row_pk_text 或資料表名稱
+  </Step>
+  
+  <Step title="檢視日誌詳情">
+    點擊日誌記錄查看完整的操作資訊，包含時間戳、執行者、變更內容等。
+  </Step>
+</Steps>
+
+<Note>
+  **audit_log 資料表檢查**
+  
+  若資料表尚未建立，系統會顯示 404 錯誤：「audit_log 資料表尚未建立」。請確認 migration 已執行。
+</Note>
+
+### 篩選選項說明
+
+<AccordionGroup>
+  <Accordion title="資料表名稱 (table_name)" icon="table">
+    顯示系統中所有有操作記錄的資料表名稱下拉選單。選擇特定資料表可查看該表的所有變更記錄。
+    
+    **常見資料表**：
+    - `BIOG_MAIN` — 人物基本資料
+    - `TEXT_CODES` — 書稿文本
+    - `OFFICE_CODES` — 官職代碼
+    - `SOCIAL_INSTITUTION_CODES` — 社會機構
+  </Accordion>
+  
+  <Accordion title="操作類型 (operation)" icon="gear">
+    篩選特定的資料庫操作類型：
+    - **INSERT** — 新增記錄
+    - **UPDATE** — 更新記錄
+    - **DELETE** — 刪除記錄
+  </Accordion>
+  
+  <Accordion title="執行者類型 (actor_type)" icon="user">
+    顯示所有執行過操作的身份類型下拉選單。例如：
+    - `user` — 一般用戶
+    - `system` — 系統自動操作
+    - `batch` — 批次匯入操作
+  </Accordion>
+  
+  <Accordion title="執行者 ID (actor_id)" icon="hashtag">
+    輸入特定用戶或系統元件的 ID，查看該執行者的所有操作記錄。
+  </Accordion>
+  
+  <Accordion title="關鍵字搜尋 (search)" icon="magnifying-glass">
+    在以下欄位中搜尋關鍵字：
+    - `operation_id` — 操作識別碼
+    - `row_pk_text` — 主鍵文字表示
+    - `table_name` — 資料表名稱
+  </Accordion>
+</AccordionGroup>
+
+## Operations 表操作記錄
+
+對於大多數資料變更追蹤需求，可使用 **Operations** 頁面（所有專家和系統管理員均可訪問）。
+
+### Operations 與 Audit Log 的差異
+
+| 特性 | Operations 表 | Audit Log 表 |
+|-----|-------------|-------------|
+| **訪問權限** | 專家、系統管理員 | 僅系統管理員 |
+| **記錄內容** | 資料表 CRUD 操作 | 更廣泛的系統事件 |
+| **資料快照** | before/after JSON | 依實作而定 |
+| **復原功能** | ✅ 支援 | ❌ 僅查看 |
+| **用途** | 資料變更追蹤與復原 | 系統稽核與合規 |
+
+### 查看 Operations 記錄
+
+<Steps>
+  <Step title="前往 Operations 頁面">
+    登入後，點擊側欄的 **Operations**。
+  </Step>
+  
+  <Step title="篩選操作記錄">
+    可依資料表、操作類型、時間範圍篩選。
+  </Step>
+  
+  <Step title="檢視變更內容">
+    點擊記錄查看完整的 before/after JSON 資料。
+  </Step>
+  
+  <Step title="復原操作（選擇性）">
+    若需復原某筆操作，點擊「復原」按鈕。系統會以執行者名義新增一筆 `op_type = 3` 的記錄。
+  </Step>
+</Steps>
+
+<Note>
+  Operations 表的詳細說明請參考 [操作記錄](/features/operations-history) 頁面。
+</Note>
+
+## Prometheus Metrics 監控
+
+CBDB Online 整合了 Prometheus metrics 收集功能，可監控系統運作狀態與效能指標。
+
+### 支援的指標
+
+<AccordionGroup>
+  <Accordion title="HTTP 請求總數 (cbdb_http_requests_total)" icon="chart-line">
+    **類型**：Counter
+    
+    **標籤**：
+    - `method` — HTTP 方法（GET、POST、PUT、DELETE）
+    - `path` — 路由模式（如 `/basicinformation/{personid}/edit`）
+    - `status` — HTTP 狀態碼（200、404、500 等）
+    
+    **用途**：追蹤請求量、錯誤率、端點使用頻率。
+  </Accordion>
+  
+  <Accordion title="HTTP 請求延遲 (cbdb_http_request_duration_seconds)" icon="clock">
+    **類型**：Histogram
+    
+    **標籤**：
+    - `method` — HTTP 方法
+    - `path` — 路由模式
+    - `status` — HTTP 狀態碼
+    
+    **用途**：分析請求處理時間分佈，計算 P50、P95、P99 延遲。
+  </Accordion>
+  
+  <Accordion title="正在處理的請求數 (cbdb_http_requests_in_progress)" icon="spinner">
+    **類型**：Gauge
+    
+    **標籤**：
+    - `method` — HTTP 方法（不包含 `path` 以避免標籤不匹配）
+    
+    **用途**：監控當前併發請求數量，檢測系統負載。
+  </Accordion>
+</AccordionGroup>
+
+### 訪問 Metrics 端點
+
+Prometheus metrics 透過 `/metrics` 端點對外提供：
+
+```bash
+curl http://your-domain.com/metrics
+```
+
+**範例輸出**：
+```
+cbdb_http_requests_total{method="GET",path="/basicinformation/{personid}/edit",status="200"} 42
+cbdb_http_request_duration_seconds_sum{method="GET",path="/basicinformation/{personid}/edit",status="200"} 3.14
+cbdb_http_requests_in_progress{method="GET"} 2
+```
+
+### 配置 Metrics 收集
+
+在 `.env` 檔案中配置 Prometheus 選項：
+
+<CodeGroup>
+```env 基本配置
+# 啟用 Prometheus metrics
+PROMETHEUS_ENABLED=true
+
+# Metrics 命名空間
+PROMETHEUS_NAMESPACE=cbdb
+
+# HTTP metrics 啟用
+PROMETHEUS_HTTP_METRICS_ENABLED=true
+
+# ⚠️ 重要：必須設為 true 防止內存泄漏
+PROMETHEUS_INCLUDE_ROUTE_PARAMS=true
+```
+
+```env 存取控制
+# IP 白名單（逗號分隔，留空允許所有 IP）
+PROMETHEUS_ALLOWED_IPS=10.0.0.1,192.168.1.0/24
+
+# 基本認證（可選）
+PROMETHEUS_AUTH_ENABLED=true
+PROMETHEUS_AUTH_USERNAME=prometheus
+PROMETHEUS_AUTH_PASSWORD=secret
+```
+
+```env Redis 存儲（生產環境推薦）
+# 存儲適配器
+PROMETHEUS_STORAGE_ADAPTER=redis
+
+# Redis 連線設定
+PROMETHEUS_REDIS_HOST=127.0.0.1
+PROMETHEUS_REDIS_PORT=6379
+PROMETHEUS_REDIS_PASSWORD=
+PROMETHEUS_REDIS_DB=2
+```
+</CodeGroup>
+
+<Warning>
+  **防止內存泄漏**
+  
+  `PROMETHEUS_INCLUDE_ROUTE_PARAMS` 必須設為 `true`！
+  
+  當設為 `false` 時，每個唯一的 URL（如 `/basicinformation/1/edit`、`/basicinformation/2/edit`）都會創建獨立的 metric 時間序列，導致內存持續增長，最終 OOM 錯誤。
+  
+  設為 `true` 時，所有相同路由的請求會合併到同一時間序列（如 `/basicinformation/{personid}/edit`），內存占用固定且可預測。
+</Warning>
+
+### 設定 IP 白名單
+
+限制只有特定 IP 可以訪問 `/metrics` 端點：
+
+<CodeGroup>
+```env 單一 IP
+PROMETHEUS_ALLOWED_IPS=10.0.0.1
+```
+
+```env CIDR 格式
+PROMETHEUS_ALLOWED_IPS=192.168.1.0/24
+```
+
+```env 混合格式
+PROMETHEUS_ALLOWED_IPS=10.0.0.1,192.168.1.0/24,2001:db8::/32
+```
+</CodeGroup>
+
+### 設定 HTTP 基本認證
+
+為 `/metrics` 端點添加密碼保護：
+
+```env
+PROMETHEUS_AUTH_ENABLED=true
+PROMETHEUS_AUTH_USERNAME=prometheus
+PROMETHEUS_AUTH_PASSWORD=your-secure-password
+```
+
+訪問時需要提供認證：
+
+```bash
+curl -u prometheus:your-secure-password http://your-domain.com/metrics
+```
+
+## Prometheus 與 Grafana 整合
+
+### 配置 Prometheus Scraper
+
+在 Prometheus 伺服器的配置檔案中添加 scrape 配置：
+
+```yaml prometheus.yml
+scrape_configs:
+  - job_name: 'cbdb-laravel'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['your-domain.com:80']
+    metrics_path: '/metrics'
+    
+    # 如果啟用了基本認證
+    basic_auth:
+      username: 'prometheus'
+      password: 'your-secure-password'
+```
+
+### Grafana Dashboard 查詢範例
+
+<AccordionGroup>
+  <Accordion title="請求速率 (QPS)" icon="gauge-high">
+    ```promql
+    rate(cbdb_http_requests_total[5m])
+    ```
+    
+    顯示每秒請求數（Queries Per Second）。
+  </Accordion>
+  
+  <Accordion title="錯誤率" icon="triangle-exclamation">
+    ```promql
+    sum(rate(cbdb_http_requests_total{status=~"5.."}[5m])) 
+    / 
+    sum(rate(cbdb_http_requests_total[5m]))
+    ```
+    
+    計算 5xx 錯誤的比例。
+  </Accordion>
+  
+  <Accordion title="平均延遲" icon="stopwatch">
+    ```promql
+    rate(cbdb_http_request_duration_seconds_sum[5m]) 
+    / 
+    rate(cbdb_http_request_duration_seconds_count[5m])
+    ```
+    
+    計算請求的平均處理時間。
+  </Accordion>
+  
+  <Accordion title="P95 延遲" icon="chart-line">
+    ```promql
+    histogram_quantile(0.95, rate(cbdb_http_request_duration_seconds_bucket[5m]))
+    ```
+    
+    計算第 95 百分位延遲（95% 的請求在此時間內完成）。
+  </Accordion>
+  
+  <Accordion title="按路徑分組的請求數" icon="route">
+    ```promql
+    sum by (path) (rate(cbdb_http_requests_total[5m]))
+    ```
+    
+    顯示每個端點的請求速率。
+  </Accordion>
+</AccordionGroup>
+
+### 建議的 Grafana 面板
+
+<CardGroup cols={2}>
+  <Card title="總請求數" icon="chart-area">
+    顯示總 QPS 與按狀態碼分組的趨勢圖。
+  </Card>
+  
+  <Card title="錯誤率" icon="circle-exclamation">
+    顯示 4xx 和 5xx 錯誤的比例與趨勢。
+  </Card>
+  
+  <Card title="延遲分布" icon="gauge">
+    顯示 P50、P95、P99 延遲的時間序列圖。
+  </Card>
+  
+  <Card title="熱門端點" icon="fire">
+    顯示請求量最高的前 10 個端點。
+  </Card>
+</CardGroup>
+
+## 監控與告警建議
+
+### 關鍵指標閾值
+
+<AccordionGroup>
+  <Accordion title="錯誤率告警" icon="bell">
+    **條件**：5xx 錯誤率超過 1%
+    
+    ```promql
+    sum(rate(cbdb_http_requests_total{status=~"5.."}[5m])) 
+    / 
+    sum(rate(cbdb_http_requests_total[5m])) > 0.01
+    ```
+    
+    **建議動作**：
+    - 檢查應用程式日誌
+    - 確認資料庫連線狀態
+    - 檢查伺服器資源使用率
+  </Accordion>
+  
+  <Accordion title="高延遲告警" icon="bell">
+    **條件**：P95 延遲超過 2 秒
+    
+    ```promql
+    histogram_quantile(0.95, rate(cbdb_http_request_duration_seconds_bucket[5m])) > 2
+    ```
+    
+    **建議動作**：
+    - 檢查慢查詢日誌
+    - 確認是否有大量資料匯入
+    - 檢查伺服器 CPU 和記憶體使用率
+  </Accordion>
+  
+  <Accordion title="請求量異常" icon="bell">
+    **條件**：QPS 突然下降超過 50%
+    
+    ```promql
+    (rate(cbdb_http_requests_total[5m]) 
+    / 
+    rate(cbdb_http_requests_total[30m] offset 30m)) < 0.5
+    ```
+    
+    **建議動作**：
+    - 檢查網路連線
+    - 確認 web 伺服器狀態
+    - 檢查上游代理或負載平衡器
+  </Accordion>
+</AccordionGroup>
+
+### 日常監控檢查清單
+
+<Steps>
+  <Step title="每日檢查">
+    - 查看錯誤率趨勢（目標：< 0.5%）
+    - 檢查 P95 延遲（目標：< 1 秒）
+    - 確認無異常流量模式
+  </Step>
+  
+  <Step title="每週檢查">
+    - 分析熱門端點的效能瓶頸
+    - 檢查是否有新的慢查詢
+    - 審查 audit log 中的異常操作
+  </Step>
+  
+  <Step title="每月檢查">
+    - 評估資料庫索引策略
+    - 檢查 Redis 存儲使用情況
+    - 審查系統管理員操作記錄
+  </Step>
+</Steps>
+
+## 疑難排解
+
+### Metrics 端點返回空白
+
+<Steps>
+  <Step title="確認 Prometheus 已啟用">
+    檢查 `.env` 中 `PROMETHEUS_ENABLED=true`。
+  </Step>
+  
+  <Step title="確認有請求被處理">
+    訪問首頁或任何其他端點，生成一些 metrics 資料。
+  </Step>
+  
+  <Step title="檢查 IP 白名單">
+    確認訪問 IP 在白名單內，或將 `PROMETHEUS_ALLOWED_IPS` 留空。
+  </Step>
+</Steps>
+
+### Audit Log 頁面顯示 404
+
+**原因**：`audit_log` 資料表尚未建立。
+
+**解決方案**：
+1. 檢查 migration 檔案是否存在
+2. 執行 migration：`php artisan migrate`
+3. 確認資料表已建立：`php artisan tinker` → `Schema::hasTable('audit_log')`
+
+### 內存不足錯誤（500 錯誤）
+
+**症狀**：
+- 應用程式頻繁返回 500 錯誤
+- 日誌顯示「Allowed memory size exhausted」
+- `/metrics` 端點返回非常大的響應
+
+**原因**：`PROMETHEUS_INCLUDE_ROUTE_PARAMS=false` 導致內存泄漏。
+
+**解決方案**：
+
+<Steps>
+  <Step title="更新配置">
+    在 `.env` 中設定：
+    ```env
+    PROMETHEUS_INCLUDE_ROUTE_PARAMS=true
+    ```
+  </Step>
+  
+  <Step title="清除現有 metrics">
+    ```bash
+    # 如果使用 Memory 適配器
+    php artisan optimize:clear
+    
+    # 如果使用 Redis 適配器
+    redis-cli KEYS "PROMETHEUS_*" | xargs redis-cli DEL
+    ```
+  </Step>
+  
+  <Step title="驗證修復">
+    訪問 `/metrics` 並確認路徑使用模式而非實際 ID：
+    ```
+    # ✅ 正確
+    path="/basicinformation/{personid}/edit"
+    
+    # ❌ 錯誤（會導致內存泄漏）
+    path="/basicinformation/123/edit"
+    ```
+  </Step>
+</Steps>
+
+## 相關資源
+
+<CardGroup cols={2}>
+  <Card title="用戶管理" icon="users" href="/admin/user-management">
+    管理用戶帳號、角色與權限
+  </Card>
+  
+  <Card title="批次操作" icon="layer-group" href="/admin/batch-operations">
+    批次匯入書稿、官職、社會機構等資料
+  </Card>
+  
+  <Card title="操作記錄" icon="rotate-left" href="/features/operations-history">
+    查看和復原歷史操作
+  </Card>
+  
+  <Card title="Prometheus 指標文檔" icon="chart-line" href="https://github.com/cbdb-project/cbdb-online-main-server/blob/main/docs/PROMETHEUS_METRICS.md">
+    完整的 Prometheus 整合指南（GitHub）
+  </Card>
+</CardGroup>

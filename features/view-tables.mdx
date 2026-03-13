@@ -1,0 +1,336 @@
+---
+title: "View Tables System"
+description: "Configurable query views for browsing and analyzing CBDB data through pre-defined database perspectives"
+---
+
+## Overview
+
+The View Tables system provides pre-configured database views and queries that allow users to browse and analyze CBDB data from different perspectives. Each view is a curated query that joins multiple tables to present meaningful information about biographical data, relationships, and historical records.
+
+## Accessing View Tables
+
+View tables are available to all authenticated users:
+
+<Steps>
+  <Step title="Navigate to View Tables">
+    Go to `/view` in the CBDB Online interface
+  </Step>
+  
+  <Step title="Browse Available Views">
+    See a list of all configured views organized by category
+  </Step>
+  
+  <Step title="Select a View">
+    Click on any view to see its data with pagination and search
+  </Step>
+  
+  <Step title="Use Search and Filters">
+    Apply filters to narrow down results based on configured searchable fields
+  </Step>
+</Steps>
+
+## View Configuration
+
+Views are configured in `config/view_tables.php`. Each view defines:
+
+```php config/view_tables.php
+return [
+    'View_BiogAddr' => [
+        'description' => '人物地址檢視',
+        'description_en' => 'Biographical Addresses View',
+        'per_page' => 50,
+        'columns' => [
+            'c_personid' => '人物 ID',
+            'c_name_chn' => '姓名',
+            'c_addr_name_chn' => '地址名稱',
+            'c_addr_type' => '地址類型'
+        ]
+    ],
+    // ... more views
+];
+```
+
+### Configuration Fields
+
+<ParamField path="description" type="string" required>
+  Chinese description of the view
+</ParamField>
+
+<ParamField path="description_en" type="string">
+  English description (optional)
+</ParamField>
+
+<ParamField path="per_page" type="integer">
+  Number of records per page (default: 50)
+</ParamField>
+
+<ParamField path="columns" type="object" required>
+  Column definitions with field names and display labels
+</ParamField>
+
+## Available Views
+
+The system includes numerous pre-configured views:
+
+<AccordionGroup>
+  <Accordion title="Biographical Views">
+    - **View_BiogAddr**: Biographical addresses with location details
+    - **View_BiogMain**: Core biographical information
+    - **View_BiogNames**: Names and alternate names
+    - **View_BiogSources**: Source references for biographical data
+  </Accordion>
+  
+  <Accordion title="Relationship Views">
+    - **View_Kinship**: Family relationships and genealogy
+    - **View_Associations**: Social associations and connections
+    - **View_InstData**: Institutional affiliations
+  </Accordion>
+  
+  <Accordion title="Office & Career Views">
+    - **View_Postings**: Office postings and appointments
+    - **View_Offices**: Office definitions and categories
+    - **View_EntryData**: Entry methods (examination, recommendation)
+  </Accordion>
+  
+  <Accordion title="Reference Data Views">
+    - **View_Dynasties**: Dynasty codes and time periods
+    - **View_Places**: Geographic locations and administrative divisions
+    - **View_TextData**: Text references and sources
+  </Accordion>
+</AccordionGroup>
+
+## Query Implementation
+
+View queries are defined in `app/ViewTables/ViewTableQueries.php`:
+
+```php ViewTableQueries.php
+class ViewTableQueries
+{
+    public static function getQuery(string $key): Builder
+    {
+        return match ($key) {
+            'View_BiogAddr' => self::biogAddr(),
+            'View_BiogMain' => self::biogMain(),
+            'View_Kinship' => self::kinship(),
+            // ... more views
+            default => throw new InvalidArgumentException("Unknown view: {$key}")
+        };
+    }
+    
+    private static function biogAddr(): Builder
+    {
+        return DB::table('BIOG_MAIN as bm')
+            ->select([
+                'bm.c_personid',
+                'bm.c_name_chn',
+                'ba.c_addr_id',
+                'ac.c_name_chn as c_addr_name_chn',
+                'ba.c_addr_type'
+            ])
+            ->join('BIOG_ADDR_DATA as ba', 'bm.c_personid', '=', 'ba.c_personid')
+            ->leftJoin('ADDR_CODES as ac', 'ba.c_addr_id', '=', 'ac.c_addr_id')
+            ->orderBy('bm.c_personid');
+    }
+}
+```
+
+## Search Functionality
+
+Searchable fields are configured in `config/view_table_searchable.php`:
+
+```php view_table_searchable.php
+return [
+    'View_BiogAddr' => [
+        'bm.c_name_chn',
+        'ac.c_name_chn',
+        'bm.c_personid'
+    ],
+    'View_Kinship' => [
+        'person.c_name_chn',
+        'kin.c_name_chn',
+        'kc.c_kin_name_chn'
+    ],
+    // ... more search configurations
+];
+```
+
+<Note>
+Field names must match the table aliases used in the query builder definition. For example, if the query uses `BIOG_MAIN as bm`, searchable fields should reference `bm.c_name_chn`.
+</Note>
+
+## Display Features
+
+### Pagination
+
+All views support pagination with configurable page size:
+
+```php
+// In controller
+$perPage = $viewConfig['per_page'] ?? 50;
+$results = $query->paginate($perPage);
+```
+
+### SQL Display
+
+Users can view the actual SQL query being executed:
+
+<Steps>
+  <Step title="Click 'Show SQL' Button">
+    Located in the top-right corner of the view page
+  </Step>
+  
+  <Step title="View Query and Bindings">
+    See the complete SQL query with parameter bindings
+  </Step>
+  
+  <Step title="Verify Results">
+    Confirm the query matches expected behavior
+  </Step>
+</Steps>
+
+```sql Example Query Display
+-- View: View_BiogAddr
+-- SQL:
+SELECT 
+    bm.c_personid,
+    bm.c_name_chn,
+    ba.c_addr_id,
+    ac.c_name_chn as c_addr_name_chn,
+    ba.c_addr_type
+FROM BIOG_MAIN as bm
+INNER JOIN BIOG_ADDR_DATA as ba ON bm.c_personid = ba.c_personid
+LEFT JOIN ADDR_CODES as ac ON ba.c_addr_id = ac.c_addr_id
+WHERE bm.c_name_chn LIKE ?
+ORDER BY bm.c_personid
+LIMIT 50 OFFSET 0
+
+-- Bindings: ['%王安石%']
+```
+
+## Creating Custom Views
+
+### Step 1: Add Configuration
+
+Add view definition to `config/view_tables.php`:
+
+```php
+'View_MyCustomView' => [
+    'description' => '自訂檢視',
+    'description_en' => 'Custom View',
+    'per_page' => 100,
+    'columns' => [
+        'field1' => 'Field 1 Label',
+        'field2' => 'Field 2 Label'
+    ]
+],
+```
+
+### Step 2: Implement Query
+
+Add query method to `ViewTableQueries.php`:
+
+```php
+private static function myCustomView(): Builder
+{
+    return DB::table('YOUR_TABLE as t')
+        ->select(['t.field1', 't.field2'])
+        ->join('RELATED_TABLE as r', 't.id', '=', 'r.foreign_id')
+        ->orderBy('t.field1');
+}
+
+// Add to getQuery() match statement:
+public static function getQuery(string $key): Builder
+{
+    return match ($key) {
+        // ... existing views
+        'View_MyCustomView' => self::myCustomView(),
+        default => throw new InvalidArgumentException("Unknown view: {$key}")
+    };
+}
+```
+
+### Step 3: Configure Search (Optional)
+
+Add searchable fields to `config/view_table_searchable.php`:
+
+```php
+'View_MyCustomView' => [
+    't.field1',
+    't.field2',
+    'r.related_field'
+],
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Table Aliases" icon="table">
+    Always use aliases for tables in queries to avoid ambiguity
+  </Card>
+  <Card title="Index Searchable Fields" icon="magnifying-glass">
+    Ensure searchable fields have appropriate database indexes
+  </Card>
+  <Card title="Limit Result Sets" icon="filter">
+    Use pagination and sensible per_page values to avoid performance issues
+  </Card>
+  <Card title="Test Queries" icon="vial">
+    Use the SQL display feature to verify query correctness
+  </Card>
+</CardGroup>
+
+### Performance Considerations
+
+<Warning>
+View queries can be complex and join multiple tables. Monitor query performance and add indexes as needed.
+</Warning>
+
+```php
+// Add indexes for frequently searched fields
+Schema::table('BIOG_MAIN', function (Blueprint $table) {
+    $table->index('c_name_chn');  // For name searches
+    $table->index('c_dy');         // For dynasty filtering
+});
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Search returns no results">
+    **Check**:
+    1. Searchable fields match table aliases in query
+    2. Field names are correct in `view_table_searchable.php`
+    3. Search term matches data format (exact vs partial matching)
+  </Accordion>
+  
+  <Accordion title="View shows empty or wrong data">
+    **Check**:
+    1. Query builder returns correct Builder instance
+    2. Table joins are correct
+    3. Field names match actual database columns
+    4. Use "Show SQL" to inspect actual query
+  </Accordion>
+  
+  <Accordion title="Pagination not working">
+    **Check**:
+    1. `per_page` is set in configuration
+    2. Query uses `paginate()` not `get()`
+    3. Blade template includes pagination links
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Search & Query" icon="magnifying-glass" href="/user-guide/search-query">
+    Learn how to use search features effectively
+  </Card>
+  <Card title="Database Schema" icon="database" href="/development/database-schema">
+    Understand table structure for creating views
+  </Card>
+  <Card title="Biographical Data" icon="address-book" href="/features/biographical-data">
+    Core data structure reference
+  </Card>
+  <Card title="Development" icon="code" href="/development/architecture">
+    System architecture and query patterns
+  </Card>
+</CardGroup>

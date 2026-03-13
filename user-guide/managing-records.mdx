@@ -1,0 +1,519 @@
+---
+title: '管理記錄'
+description: '學習如何編輯、刪除和維護 CBDB 資料庫中的歷史人物記錄'
+icon: 'folder-tree'
+---
+
+## 概述
+
+CBDB Online Input System 提供完整的記錄管理功能，包括編輯現有資料、查看操作歷史、復原變更以及批次處理。本指南將協助您有效管理和維護人物傳記資料。
+
+## 編輯現有記錄
+
+### 進入編輯模式
+
+<Steps>
+  <Step title="搜尋目標人物">
+    使用搜尋功能定位需要編輯的人物記錄。您可以透過：
+    - 姓名搜尋（支援中文、拼音、後綴匹配）
+    - Person ID 直接查詢
+    - 朝代篩選
+    - 高級檢索條件
+  </Step>
+  
+  <Step title="開啟編輯頁面">
+    點擊人物記錄的「編輯」按鈕，進入編輯介面。
+    
+    <Info>
+    URL 格式：`/basicinformation/{personid}/edit`
+    
+    您也可以直接訪問 `/basicinformation/{personid}/show` 查看唯讀版本。
+    </Info>
+  </Step>
+  
+  <Step title="修改資料欄位">
+    在表單中修改需要更新的欄位。系統會追蹤所有變更。
+  </Step>
+  
+  <Step title="選擇儲存方式">
+    根據您的用戶角色和需求，選擇適當的儲存方式：
+    
+    <Tabs>
+      <Tab title="直接儲存">
+        點擊「儲存」按鈕，變更立即生效並記錄操作日誌。
+        
+        **適用於**：一般用戶、專家用戶
+      </Tab>
+      
+      <Tab title="提交提案">
+        點擊「提交提案」，建立審核提案而不直接修改資料。
+        
+        **適用於**：
+        - 眾包用戶（強制使用此模式）
+        - 一般用戶對不確定的修改
+        - 需要專家審核的重大變更
+      </Tab>
+    </Tabs>
+  </Step>
+</Steps>
+
+### 編輯子資源
+
+人物記錄包含多種子資源，每種資源有獨立的編輯介面。
+
+<CardGroup cols={3}>
+  <Card title="別名" icon="signature">
+    `/basicinformation/{id}/altnames`
+    
+    管理人物的字、號、諡號等
+  </Card>
+  
+  <Card title="地址" icon="location-dot">
+    `/basicinformation/{id}/addresses`
+    
+    編輯籍貫、居住地、活動地等
+  </Card>
+  
+  <Card title="出處" icon="book">
+    `/basicinformation/{id}/sources`
+    
+    維護文獻來源資訊
+  </Card>
+  
+  <Card title="親屬關係" icon="people-group">
+    `/basicinformation/{id}/kinship`
+    
+    編輯家族關係網絡
+  </Card>
+  
+  <Card title="社會關係" icon="handshake">
+    `/basicinformation/{id}/assoc`
+    
+    管理師生、交遊等關係
+  </Card>
+  
+  <Card title="任官記錄" icon="landmark">
+    `/basicinformation/{id}/offices`
+    
+    編輯官職履歷和任職地點
+  </Card>
+  
+  <Card title="入仕方式" icon="door-open">
+    `/basicinformation/{id}/entries`
+    
+    記錄科舉、蔭補等入仕途徑
+  </Card>
+  
+  <Card title="生平事件" icon="timeline">
+    `/basicinformation/{id}/events`
+    
+    編輯重要生平事件
+  </Card>
+  
+  <Card title="社會機構" icon="building">
+    `/basicinformation/{id}/socialinst`
+    
+    管理書院、寺廟等機構關係
+  </Card>
+</CardGroup>
+
+<Note>
+複合主鍵表（如別名、地址、親屬關係）使用查詢參數模式的 URL，例如：
+
+`/basicinformation/{id}/altnames/edit?c_sequence=1&c_alt_name_chn=字德明&c_alt_name_type_code=4`
+
+這確保了複合主鍵的準確識別。
+</Note>
+
+### 變更檢測與無實質更新
+
+系統會智能檢測資料是否真正變更：
+
+```php
+// 系統會忽略以下欄位的變化
+- c_modified_by    // 修改者（自動更新）
+- c_modified_date  // 修改時間（自動更新）
+```
+
+如果提交的資料與資料庫現有值完全相同，系統會顯示：
+
+<Warning>
+無實質更新，資料未變更
+</Warning>
+
+這可以避免產生無意義的操作記錄。
+
+## 操作歷史
+
+所有資料變更都會記錄在 `operations` 表中，提供完整的審計軌跡。
+
+### 查看操作記錄
+
+<Steps>
+  <Step title="進入操作記錄頁面">
+    導航至「操作記錄」模組（`/operations`）。
+  </Step>
+  
+  <Step title="使用篩選條件">
+    系統提供多種篩選選項：
+    
+    - **按人物 ID**：查看特定人物的所有變更
+    - **按操作類型**：新增、修改、刪除、提案等
+    - **按資料表**：篩選特定類型的資料（如 BIOG_MAIN、KIN_DATA）
+    - **按提案狀態**：待審核、已核准、已退回、已撤回
+    - **按時間範圍**：查看特定時期的操作
+  </Step>
+  
+  <Step title="檢視詳細資訊">
+    點擊操作記錄，查看完整的變更明細：
+    
+    - **操作前數據** (`resource_original`)：修改前的值
+    - **操作後數據** (`resource_data`)：修改後的值
+    - **操作者資訊**：執行者姓名和 ID
+    - **時間戳記**：精確到秒的操作時間
+    - **關聯資源**：涉及的資料表和主鍵
+  </Step>
+</Steps>
+
+### 操作類型說明
+
+<CodeGroup>
+```plaintext 操作類型代碼
+1 = 新增 (TYPE_CREATE)
+2 = 提交眾包 (TYPE_SUBMIT_CROWDSOURCING)
+3 = 修改 (TYPE_UPDATE)
+4 = 刪除 (TYPE_DELETE)
+5 = 核准眾包 (TYPE_CONFIRM_CROWDSOURCING)
+6 = 退回眾包 (TYPE_REJECT_CROWDSOURCING)
+7 = 復原操作 (TYPE_RESTORE)
+8 = 提案新增 (TYPE_PROPOSAL_CREATE)
+9 = 提案修改 (TYPE_PROPOSAL_UPDATE)
+```
+</CodeGroup>
+
+### 查看審計日誌
+
+除了操作記錄，系統還維護獨立的審計日誌（`audit_log` 表）：
+
+<Accordion title="審計日誌特點">
+  - **資料庫層級追蹤**：記錄實際的 SQL 操作（INSERT、UPDATE、DELETE）
+  - **完整前後快照**：保存變更前後的完整記錄
+  - **關聯操作記錄**：透過 `operation_id` 關聯到 `operations` 表
+  - **不可篡改**：設計為只寫日誌，確保審計完整性
+  
+  管理員可透過 `/admin/audit-logs` 查看完整審計日誌。
+</Accordion>
+
+## 復原先前版本
+
+<Warning>
+復原功能僅限**活躍的專家用戶**和**系統管理員**使用（`canRestoreOperations()` 權限）。
+</Warning>
+
+### 執行復原操作
+
+<Steps>
+  <Step title="定位目標操作記錄">
+    在 `/operations` 頁面找到需要復原的變更記錄。
+  </Step>
+  
+  <Step title="檢查復原條件">
+    確認該記錄滿足復原條件：
+    - 操作類型為「修改」（`op_type = 3`）
+    - 存在 `resource_original` 資料（變更前的值）
+    - 目標資源仍然存在於資料庫中
+    
+    <Info>
+    部分資源類型（如任官記錄的地址清單）目前暫停提供復原功能，系統會自動隱藏復原按鈕。
+    </Info>
+  </Step>
+  
+  <Step title="確認復原">
+    點擊「復原」按鈕，系統會顯示確認對話框：
+    
+    > 將以你的名義對該資源進行一次修改，恢復至本次改動之前，是否繼續？
+    
+    確認後，系統會：
+    1. 將資料恢復到變更前的狀態
+    2. 以您的身份新增一筆 `op_type = 7` 的復原記錄
+    3. 記錄完整的前後對比資料
+  </Step>
+  
+  <Step title="驗證復原結果">
+    返回人物編輯頁面，確認資料已正確復原。
+  </Step>
+</Steps>
+
+### 復原記錄追蹤
+
+每次復原操作會建立新的 `operations` 記錄：
+
+```json
+{
+  "op_type": 7,
+  "resource": "BIOG_MAIN",
+  "resource_id": "123456",
+  "resource_original": { /* 復原前的值 */ },
+  "resource_data": { /* 復原後的值 */ },
+  "created_by": "執行復原的管理員 ID",
+  "created_at": "2026-03-13 10:30:00"
+}
+```
+
+這確保所有變更都可追溯，包括復原操作本身。
+
+## 刪除記錄
+
+### 軟刪除機制
+
+CBDB 使用軟刪除而非實際刪除記錄：
+
+<Steps>
+  <Step title="標記為待刪除">
+    點擊人物記錄的「刪除」按鈕後，系統會：
+    - 將 `c_name_chn` 改為 `<待删除>`
+    - 記錄刪除操作（`op_type = 4`）
+    - 保留所有關聯資料
+  </Step>
+  
+  <Step title="隱藏於搜尋結果">
+    標記為待刪除的記錄不會出現在一般搜尋結果中，但仍保存在資料庫。
+  </Step>
+  
+  <Step title="管理員審核">
+    管理員可以：
+    - 查看完整的刪除記錄
+    - 透過操作歷史復原誤刪的資料
+    - 執行真正的物理刪除（需直接操作資料庫）
+  </Step>
+</Steps>
+
+<Warning>
+刪除操作無法透過一般介面復原，請謹慎使用。如需恢復誤刪資料，請聯繫系統管理員。
+</Warning>
+
+### 眾包用戶的刪除提案
+
+眾包用戶提交的刪除請求會建立提案而非直接刪除：
+
+```plaintext
+眾包刪除流程：
+1. 眾包用戶點擊「刪除」
+2. 系統建立 crowdsourcing_status = 2 的提案
+3. 專家審核並決定是否執行刪除
+4. 核准後才真正標記為 <待删除>
+```
+
+## 批次操作
+
+批次操作功能允許專家和管理員高效處理大量資料。
+
+### 另存為新記錄
+
+<Tabs>
+  <Tab title="基本另存">
+    **功能**：`/basicinformation/{id}/saveas`
+    
+    複製現有人物記錄的基本資料，建立新的 Person ID：
+    - 保留姓名、朝代、年份等基本欄位
+    - 自動分配新的 Person ID（當前最大值 + 1）
+    - 清空修改時間戳記，填入建立資訊
+    - 不複製子資源（別名、關係等）
+  </Tab>
+  
+  <Tab title="完整複製含關係">
+    **功能**：`/basicinformation/{id}/Duplicate_Collateral_Info`
+    
+    複製人物及其所有關聯資訊（需專家/管理員權限）：
+    
+    <AccordionGroup>
+      <Accordion title="複製的資料範圍">
+        - ✅ 基本資料 (BIOG_MAIN)
+        - ✅ 地址資訊 (BIOG_ADDR_DATA)
+        - ✅ 出處文獻 (BIOG_SOURCE_DATA)
+        - ✅ 親屬關係 (KIN_DATA)，包含雙向關係
+        - ✅ 社會關係 (ASSOC_DATA)，清除第三方關聯欄位
+        - ✅ 社會機構 (BIOG_INST_DATA)
+        - ✅ 社會區分 (STATUS_DATA)
+      </Accordion>
+      
+      <Accordion title="資料清理規則">
+        複製時會自動處理以下欄位：
+        - 新 Person ID 自動分配
+        - 所有時間戳記重新生成
+        - 社會關係的 `c_kin_id`、`c_assoc_kin_id`、`c_tertiary_personid` 清零
+        - 雙向關係（親屬、社會）會同步建立對應記錄
+      </Accordion>
+    </AccordionGroup>
+  </Tab>
+</Tabs>
+
+### 代碼表維護
+
+系統提供統一的代碼表管理介面 `/codes/{table_name}`。
+
+<CardGroup cols={2}>
+  <Card title="查看代碼表" icon="table">
+    瀏覽各類代碼表的完整內容：
+    - 朝代 (DYNASTIES)
+    - 地名 (CHORONYM_CODES)
+    - 官名 (OFFICE_CODES)
+    - 關係類型 (KIN_CODES, ASSOC_CODES)
+    - 更多...
+    
+    完整清單參見 `config/codes.php` 白名單。
+  </Card>
+  
+  <Card title="編輯代碼" icon="pen-to-square">
+    一般用戶和專家可以：
+    - 新增代碼條目（直接儲存或提案）
+    - 編輯現有代碼
+    - 為代碼添加說明和來源
+    
+    內部表格（`CBDB__` 前綴）為唯讀模式。
+  </Card>
+</CardGroup>
+
+<Warning>
+代碼表修改會影響所有使用該代碼的記錄，請謹慎操作。建議使用提案模式，由專家審核後再執行。
+</Warning>
+
+## 提案管理
+
+### 提案工作流程
+
+<Steps>
+  <Step title="提交提案">
+    在編輯頁面點擊「提交提案」，系統建立 `op_type = 8/9` 的提案記錄。
+  </Step>
+  
+  <Step title="查看自己的提案">
+    訪問 `/operations?proposals_only=1` 查看所有提案。
+    
+    提案狀態包括：
+    - **pending**：待審核
+    - **approved**：已核准
+    - **rejected**：已退回
+    - **cancelled**：已撤回
+  </Step>
+  
+  <Step title="修改提案">
+    對於 `pending` 或 `rejected` 狀態的提案，可以：
+    - 點擊「修改提案」重新編輯
+    - 修改後狀態重設為 `pending`
+    - 更新 `__proposal_meta.updated_at` 時間戳記
+  </Step>
+  
+  <Step title="撤回提案">
+    提案者可主動撤回不再需要的提案：
+    - 點擊「撤回提案」按鈕
+    - 選填撤回原因
+    - 提案標記為 `cancelled`，不再顯示於待審核列表
+  </Step>
+</Steps>
+
+### 專家審核提案
+
+<Tabs>
+  <Tab title="核准提案">
+    專家/管理員點擊「核准」後，系統會：
+    1. 執行資料變更（INSERT 或 UPDATE）
+    2. 更新提案狀態為 `approved`
+    3. 記錄審核者和審核時間
+    4. 新增正式操作記錄（`op_type = 1/3`）
+    5. 寫入審計日誌
+  </Tab>
+  
+  <Tab title="退回提案">
+    專家/管理員點擊「退回」後：
+    1. 顯示備註輸入框
+    2. 提案狀態改為 `rejected`
+    3. 記錄退回原因和審核者資訊
+    4. 不修改原資料表內容
+    5. 提案者可查看退回意見並重新提交
+  </Tab>
+</Tabs>
+
+### 提案衝突檢測
+
+系統會自動檢測主鍵衝突：
+
+```plaintext
+新增提案檢查：
+✓ 目標主鍵是否已存在於資料表
+✓ 是否與其他待審核提案衝突
+✗ 如有衝突，提示調整主鍵後重新提交
+```
+
+## 維護工具
+
+### 關係修復工具
+
+系統提供單向關係修復功能（`/admin/unidirectional-relationship-repair`）：
+
+<Accordion title="修復親屬關係 (KIN_DATA)">
+  檢測並修復只有單向記錄的親屬關係：
+  - 掃描 `KIN_DATA` 表找出單向關係
+  - 自動建立對應的反向關係
+  - 記錄修復操作
+  - 確保關係網絡的完整性
+</Accordion>
+
+<Accordion title="修復社會關係 (ASSOC_DATA)">
+  類似地修復社會關係的雙向一致性。
+</Accordion>
+
+### 姓名搜尋索引管理
+
+系統使用 `CBDB__NAME_FTS` 表提供高效姓名搜尋。
+
+**管理命令**：
+```bash
+# 重建完整索引
+php artisan cbdb:rebuild-name-fts
+
+# 為特定人物重建索引
+php artisan cbdb:reindex-person {personid}
+```
+
+管理員可透過 `/admin/cbdb-table-maintenance` 頁面執行索引重建。
+
+## 最佳實踐
+
+<CardGroup cols={2}>
+  <Card title="編輯前備份" icon="floppy-disk">
+    對於重大修改，建議先使用「另存為」功能建立備份記錄。
+  </Card>
+  
+  <Card title="查看操作歷史" icon="clock-rotate-left">
+    編輯前先查看該記錄的歷史變更，了解資料演變脈絡。
+  </Card>
+  
+  <Card title="添加修改說明" icon="comment">
+    在備註欄位清楚說明修改原因和依據，便於後續追溯。
+  </Card>
+  
+  <Card title="分段保存" icon="list-check">
+    大量修改時分段保存，避免因驗證錯誤而丟失所有修改。
+  </Card>
+</CardGroup>
+
+## 相關資源
+
+<CardGroup cols={2}>
+  <Card title="資料錄入" icon="pen-to-square" href="/user-guide/data-entry">
+    了解如何建立新的人物記錄
+  </Card>
+  
+  <Card title="搜尋查詢" icon="magnifying-glass" href="/user-guide/search-query">
+    學習如何高效檢索資料
+  </Card>
+  
+  <Card title="用戶角色" icon="users" href="/user-guide/user-roles">
+    了解不同角色的操作權限
+  </Card>
+  
+  <Card title="疑難排解" icon="life-ring" href="/user-guide/managing-records">
+    常見問題解決方案
+  </Card>
+</CardGroup>

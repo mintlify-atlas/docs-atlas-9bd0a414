@@ -1,0 +1,352 @@
+---
+title: "Query Entry Postings"
+api: "POST https://input.cbdb.fas.harvard.edu/api/query_entry_postings"
+description: "通過入仕途徑查詢人物及其相關資訊"
+---
+
+## Description
+
+This endpoint queries people based on their entry paths (ways of entering government service), with optional filters for location, date ranges, and coordinates.
+
+<Note>
+  This endpoint uses POST method with `Content-Type: application/json`.
+</Note>
+
+## Request Body
+
+<ParamField body="entry" type="array" required>
+  要查詢的入仕途徑 ID 列表 (Array of entry path IDs to query)
+  
+  Example: `[36]` for "科舉：進士（籠統）" (Examination: jinshi general)
+</ParamField>
+
+<ParamField body="usePeoplePlace" type="number">
+  是否啟用與人物相關的地點條件
+  
+  - `1` - 啟用地點篩選 (Enable location filter)
+  - `0` - 不啟用 (Disable, default)
+  
+  <Warning>
+    當此參數為 `0` 時，`peoplePlace` 和 `locationType` 參數將被忽略。
+  </Warning>
+</ParamField>
+
+<ParamField body="peoplePlace" type="array">
+  與人物相關的地點列表 (Array of location IDs)
+  
+  Only used when `usePeoplePlace=1`.
+</ParamField>
+
+<ParamField body="locationType" type="string">
+  與人物相關的地點類型
+  
+  - `pAddr` - 僅查找人物地點 (Person's location only)
+  - `eAddr` - 僅查找入仕地點 (Entry location only)
+  - `peAddr` - 同時查找兩者 (Both locations)
+  
+  Only used when `usePeoplePlace=1`.
+</ParamField>
+
+<ParamField body="useDate" type="number">
+  是否採用年份條件
+  
+  - `1` - 啟用日期篩選 (Enable date filter)
+  - `0` - 不啟用 (Disable, default)
+  
+  <Warning>
+    當此參數為 `0` 時，所有日期相關參數（`dateType`, `dateStartTime`, `dateEndTime`, `dynStart`, `dynEnd`）將被忽略。
+  </Warning>
+</ParamField>
+
+<ParamField body="dateType" type="string">
+  年份類型
+  
+  - `entry` - 入仕年 (Entry year)
+  - `index` - 指數年 (Index year)
+  - `dynasty` - 朝代 (Dynasty)
+  
+  Only used when `useDate=1`.
+  
+  <Info>
+    - 當 `dateType` 為 `entry` 或 `index` 時，僅使用 `dateStartTime` 和 `dateEndTime`
+    - 當 `dateType` 為 `dynasty` 時，僅使用 `dynStart` 和 `dynEnd`
+  </Info>
+</ParamField>
+
+<ParamField body="dateStartTime" type="number">
+  年份開始日期 (Start year)
+  
+  Used when `useDate=1` and `dateType` is `entry` or `index`.
+</ParamField>
+
+<ParamField body="dateEndTime" type="number">
+  年份結束日期 (End year)
+  
+  Used when `useDate=1` and `dateType` is `entry` or `index`.
+</ParamField>
+
+<ParamField body="dynStart" type="number">
+  開始朝代 (Starting dynasty code)
+  
+  Used when `useDate=1` and `dateType` is `dynasty`.
+</ParamField>
+
+<ParamField body="dynEnd" type="number">
+  結束朝代 (Ending dynasty code)
+  
+  Used when `useDate=1` and `dateType` is `dynasty`.
+</ParamField>
+
+<ParamField body="useXy" type="number">
+  是否使用 xy 座標
+  
+  - `1` - 返回座標資訊 (Include coordinates)
+  - `0` - 不返回 (Exclude coordinates, default)
+</ParamField>
+
+<ParamField body="start" type="number">
+  結果開始筆數 (Starting record number)
+  
+  Default: `0`
+</ParamField>
+
+<ParamField body="list" type="number">
+  列表長度 (Number of records to return)
+  
+  Default: `10`
+</ParamField>
+
+## Response
+
+<ResponseField name="total" type="number">
+  數據總筆數 (Total number of matching records)
+</ResponseField>
+
+<ResponseField name="start" type="number">
+  當前數據開始筆數 (Current starting record number)
+</ResponseField>
+
+<ResponseField name="end" type="number">
+  當前數據結束筆數 (Current ending record number)
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  查詢結果列表 (Array of person records)
+  
+  <Expandable title="Person Entry Record">
+    <ResponseField name="PersonID" type="number">
+      人物 ID
+    </ResponseField>
+    
+    <ResponseField name="Name" type="string">
+      人物名稱（英文）
+    </ResponseField>
+    
+    <ResponseField name="NameChn" type="string">
+      人物名稱（中文）
+    </ResponseField>
+    
+    <ResponseField name="Sex" type="string">
+      人物性別 (M=Male, F=Female)
+    </ResponseField>
+    
+    <ResponseField name="IndexYear" type="number">
+      人物指數年
+    </ResponseField>
+    
+    <ResponseField name="EntryDesc" type="string">
+      入仕途徑（英文）
+    </ResponseField>
+    
+    <ResponseField name="EntryChn" type="string">
+      入仕途徑（中文）
+    </ResponseField>
+    
+    <ResponseField name="EntryYear" type="number">
+      入仕年
+    </ResponseField>
+    
+    <ResponseField name="EntryRank" type="number">
+      考試排名 (Examination ranking, if applicable)
+    </ResponseField>
+    
+    <ResponseField name="KinType" type="string">
+      親屬關係 (Kinship type)
+    </ResponseField>
+    
+    <ResponseField name="KinName" type="string">
+      親屬姓名（英文）
+    </ResponseField>
+    
+    <ResponseField name="KinChn" type="string">
+      親屬姓名（中文）
+    </ResponseField>
+    
+    <ResponseField name="Association" type="string">
+      社會關係（英文）
+    </ResponseField>
+    
+    <ResponseField name="AssocName" type="string">
+      社會關係人姓名（英文）
+    </ResponseField>
+    
+    <ResponseField name="AssocChn" type="string">
+      社會關係人姓名（中文）
+    </ResponseField>
+    
+    <ResponseField name="AddrID" type="number">
+      人物地點 ID
+    </ResponseField>
+    
+    <ResponseField name="AddrType" type="string">
+      地點類型（英文）
+    </ResponseField>
+    
+    <ResponseField name="AddrTypeChn" type="string">
+      地點類型（中文）
+    </ResponseField>
+    
+    <ResponseField name="AddrName" type="string">
+      人物地點名稱（英文）
+    </ResponseField>
+    
+    <ResponseField name="AddrChn" type="string">
+      人物地點名稱（中文）
+    </ResponseField>
+    
+    <ResponseField name="X" type="number">
+      人物地點經度座標 (Longitude)
+    </ResponseField>
+    
+    <ResponseField name="Y" type="number">
+      人物地點緯度座標 (Latitude)
+    </ResponseField>
+    
+    <ResponseField name="xy_count" type="number">
+      結果中同一人物地點的人物數 (Count of people at this location)
+    </ResponseField>
+    
+    <ResponseField name="ParentState" type="string">
+      父母情況（英文）
+    </ResponseField>
+    
+    <ResponseField name="ParentStateChn" type="string">
+      父母情況（中文）
+    </ResponseField>
+    
+    <ResponseField name="EntryPlace" type="string">
+      入仕地點名稱（英文）
+    </ResponseField>
+    
+    <ResponseField name="EntryPlaceChn" type="string">
+      入仕地點名稱（中文）
+    </ResponseField>
+    
+    <ResponseField name="EntryX" type="number">
+      入仕地點經度座標 (Longitude)
+    </ResponseField>
+    
+    <ResponseField name="EntryY" type="number">
+      入仕地點緯度座標 (Latitude)
+    </ResponseField>
+    
+    <ResponseField name="dynasty" type="string">
+      朝代（英文）
+    </ResponseField>
+    
+    <ResponseField name="dynastyChn" type="string">
+      朝代（中文）
+    </ResponseField>
+    
+    <ResponseField name="entry_xy_count" type="number">
+      結果中同一入仕地點的人物數 (Count of people at this entry location)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+# Query people who entered through jinshi examination between 1368-1644
+curl -X POST "https://input.cbdb.fas.harvard.edu/api/query_entry_postings" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "entry": [36],
+    "usePeoplePlace": 0,
+    "peoplePlace": [],
+    "locationType": "peAddr",
+    "useDate": 1,
+    "dateType": "entry",
+    "dateStartTime": 1368,
+    "dateEndTime": 1644,
+    "dynStart": null,
+    "dynEnd": null,
+    "useXy": 1,
+    "start": 1,
+    "list": 10
+  }'
+```
+
+```bash cURL (Dynasty Filter)
+# Query people who entered through jinshi examination during Jin to Qing dynasties
+curl -X POST "https://input.cbdb.fas.harvard.edu/api/query_entry_postings" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "entry": [36],
+    "usePeoplePlace": 0,
+    "peoplePlace": [],
+    "locationType": "peAddr",
+    "useDate": 1,
+    "dateType": "dynasty",
+    "dateStartTime": null,
+    "dateEndTime": null,
+    "dynStart": 17,
+    "dynEnd": 20,
+    "useXy": 1,
+    "start": 1,
+    "list": 10
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "total": 100,
+  "start": 1,
+  "end": 10,
+  "data": [
+    {
+      "PersonID": 26219,
+      "Name": "Sheng Yingyang",
+      "NameChn": "盛應陽",
+      "Sex": "M",
+      "IndexYear": 1553,
+      "EntryDesc": "examination: jinshi (general)",
+      "EntryChn": "科舉: 進士(籠統)",
+      "EntryYear": 1526,
+      "EntryRank": 0,
+      "KinType": "U",
+      "KinName": "Wei Xiang",
+      "KinChn": "未詳",
+      "Association": "[Undefined]",
+      "AssocName": "Wei Xiang",
+      "AssocChn": "未詳",
+      "AddrType": "Basic Affiliation",
+      "AddrTypeChn": "籍貫（基本地址）",
+      "AddrName": "Wu Xian",
+      "AddrChn": "吳縣",
+      "X": 120.61862,
+      "Y": 31.31271,
+      "xy_count": 17,
+      "ParentState": "[Unknown]",
+      "ParentStateChn": "未詳",
+      "EntryPlace": "",
+      "EntryPlaceChn": "",
+      "EntryX": "",
+      "EntryY": "",
+      "entry_xy_count": ""
+    }
+  ]
+}
+```
+</ResponseExample>

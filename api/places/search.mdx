@@ -1,0 +1,128 @@
+---
+title: 'Search Places by Name'
+api: 'GET https://input.cbdb.fas.harvard.edu/api/place_list'
+---
+
+Search for places by name (Chinese or English) with optional time range filters.
+
+## Parameters
+
+<ParamField query="name" type="string" required>
+  Place name in Chinese or English (URL encoded)
+</ParamField>
+
+<ParamField query="accurate" type="number" required>
+  Match type:
+  - `0` = Exact match
+  - `1` = Partial match (fuzzy search)
+</ParamField>
+
+<ParamField query="startTime" type="number">
+  Start time (year) for filtering places by their existence period
+</ParamField>
+
+<ParamField query="endTime" type="number">
+  End time (year) for filtering places by their existence period
+</ParamField>
+
+<ParamField query="start" type="number">
+  Starting record number for pagination
+</ParamField>
+
+<ParamField query="list" type="number">
+  Number of records to return (page size)
+</ParamField>
+
+## Response
+
+<ResponseField name="total" type="number">
+  Total number of records
+</ResponseField>
+
+<ResponseField name="start" type="number">
+  Starting record number of current page
+</ResponseField>
+
+<ResponseField name="end" type="number">
+  Ending record number of current page
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of place objects
+  
+  <ResponseField name="pId" type="number">
+    Place ID (place code)
+  </ResponseField>
+  
+  <ResponseField name="pName" type="string">
+    Place name in English
+  </ResponseField>
+  
+  <ResponseField name="pNameChn" type="string">
+    Place name in Chinese
+  </ResponseField>
+  
+  <ResponseField name="pStartTime" type="number">
+    Start year of place's existence
+  </ResponseField>
+  
+  <ResponseField name="pEndTime" type="number">
+    End year of place's existence
+  </ResponseField>
+  
+  <ResponseField name="pBName" type="string">
+    Parent place name in English
+  </ResponseField>
+  
+  <ResponseField name="pBNameChn" type="string">
+    Parent place name in Chinese
+  </ResponseField>
+</ResponseField>
+
+## Examples
+
+### Fuzzy Search
+
+Search for all places containing "普洱道" (partial match):
+
+```bash
+curl "https://input.cbdb.fas.harvard.edu/api/place_list?name=%E6%99%AE%E6%B4%B2%E9%81%93&accurate=1"
+```
+
+### Exact Search
+
+Search for places exactly matching "Puer":
+
+```bash
+curl "https://input.cbdb.fas.harvard.edu/api/place_list?name=Puer&accurate=0"
+```
+
+### Response Example
+
+```json
+{
+    "total": 100,
+    "start": 1,
+    "end": 2,
+    "data": [
+        {
+            "pId": 9099,
+            "pName": "Guangzhou Shi",
+            "pNameChn": "廣州市",
+            "pStartTime": 1912,
+            "pEndTime": 1949,
+            "pBName": "Guangdong sheng",
+            "pBNameChn": "廣東省"
+        },
+        {
+            "pId": 9102,
+            "pName": "Guangzhou Shi",
+            "pNameChn": "廣州市",
+            "pStartTime": 1912,
+            "pEndTime": 1949,
+            "pBName": "Guangxi sheng",
+            "pBNameChn": "廣西省"
+        }
+    ]
+}
+```

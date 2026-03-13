@@ -1,0 +1,184 @@
+---
+title: 'Association Types'
+description: 'Retrieve and search social association type codes and names'
+---
+
+## Overview
+
+These endpoints allow you to retrieve association types (social relationship categories) by type code or search for associations by name. Association types are hierarchical and organized into categories.
+
+## Get Association Types by Code
+
+Retrieve all association types under a specific type code.
+
+### Endpoint
+
+```
+GET https://input.cbdb.fas.harvard.edu/api/get_assoc
+```
+
+### Query Parameters
+
+<ParamField query="aType" type="string" required>
+  Association type code (hierarchical code)
+  
+  Examples:
+  - `0406`: Recommendation and sponsorship category
+  - `02`: Academic relationships category
+</ParamField>
+
+### Request Example
+
+```
+GET /api/get_assoc?aType=0406
+```
+
+This retrieves all association types under the "Recommendation and Sponsorship" category.
+
+### Response
+
+<ResponseField name="total" type="number">
+  Total number of association types
+</ResponseField>
+
+<ResponseField name="start" type="number">
+  Starting record number
+</ResponseField>
+
+<ResponseField name="end" type="number">
+  Ending record number
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of association type records
+
+  <ResponseField name="aId" type="number">
+    Association type code (ID)
+  </ResponseField>
+
+  <ResponseField name="aName" type="string">
+    Association type name (English)
+  </ResponseField>
+
+  <ResponseField name="aNameChn" type="string">
+    Association type name (Chinese)
+  </ResponseField>
+</ResponseField>
+
+### Response Example
+
+```json
+{
+  "total": 10,
+  "start": 1,
+  "end": 2,
+  "data": [
+    {
+      "aId": "351",
+      "aName": "Posthumous titular office proposed for",
+      "aNameChn": "提議封贈Y"
+    }
+  ]
+}
+```
+
+## Find Association Types by Name
+
+Search for association types using fuzzy name matching.
+
+### Endpoint
+
+```
+GET https://input.cbdb.fas.harvard.edu/api/find_assoc
+```
+
+### Query Parameters
+
+<ParamField query="aName" type="string" required>
+  Association name to search for (Chinese or English, URL-encoded)
+  
+  Uses fuzzy matching - partial matches will be returned
+</ParamField>
+
+### Request Example
+
+```
+GET /api/find_assoc?aName=%E9%96%80%E4%BA%BA
+```
+
+This searches for all association types containing "門人" (disciple).
+
+### Response
+
+<ResponseField name="total" type="number">
+  Total number of matching association types
+</ResponseField>
+
+<ResponseField name="start" type="number">
+  Starting record number
+</ResponseField>
+
+<ResponseField name="end" type="number">
+  Ending record number
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of matching association type records
+
+  <ResponseField name="aId" type="number">
+    Association type code (ID)
+  </ResponseField>
+
+  <ResponseField name="aName" type="string">
+    Association type name (English)
+  </ResponseField>
+
+  <ResponseField name="aNameChn" type="string">
+    Association type name (Chinese)
+  </ResponseField>
+</ResponseField>
+
+### Response Example
+
+```json
+{
+  "total": 10,
+  "start": 1,
+  "end": 2,
+  "data": [
+    {
+      "aId": 351,
+      "aName": "Posthumous titular office proposed for",
+      "aNameChn": "提議封贈Y"
+    }
+  ]
+}
+```
+
+## Common Association Types
+
+Here are some commonly used association type codes:
+
+| Code | English | Chinese | Description |
+|------|---------|---------|-------------|
+| 22 | Student of | 為Y之學生 | X is a student of Y |
+| 23 | Teacher of | 為Y之老師 | X is a teacher of Y |
+| 429 | Corresponded with | 致書 | X corresponded with Y |
+| 02 | Academic relationships | 學術關係 | Category for all academic relationships |
+| 0406 | Recommendation and sponsorship | 薦舉保任 | Category for recommendation relationships |
+
+## Association Type Hierarchy
+
+Association types are organized hierarchically:
+
+- **Top-level categories** (e.g., `02`, `04`): Broad relationship categories
+- **Sub-categories** (e.g., `0406`): Specific relationship groups
+- **Individual types** (e.g., `22`, `23`, `429`): Specific relationship types
+
+## Notes
+
+- Association type codes are used as input parameters for the [Query Social Associations](/api/relationships/social-associations) endpoint
+- The search endpoint uses **fuzzy matching**, so partial names will return results
+- Names can be searched in either English or Chinese
+- Remember to URL-encode the `aName` parameter when searching
+- Association relationships are directional: the code determines whether X is related to Y or Y is related to X

@@ -1,0 +1,95 @@
+---
+title: "List Entry Paths by Category"
+api: "GET https://input.cbdb.fas.harvard.edu/api/entry_list"
+description: "根據入仕途徑類別代碼獲取其下屬的入仕途徑列表"
+---
+
+## Description
+
+This endpoint retrieves entry paths based on their category code. Entry paths represent the various ways individuals entered government service in historical China.
+
+## Parameters
+
+<ParamField query="id" type="number" required>
+  入仕途徑類別代碼 (Entry category code)
+  
+  Examples:
+  - `04` - 科舉門 (Examination path)
+  - `0403` - 科舉門-制舉 (Examination path - Special examinations)
+</ParamField>
+
+<ParamField query="start" type="number">
+  開始筆數 (Starting record number)
+  
+  Default: `0`
+</ParamField>
+
+<ParamField query="list" type="number">
+  列表長度 (Number of records to return)
+  
+  If omitted, returns all records in the category.
+</ParamField>
+
+## Response
+
+<ResponseField name="total" type="number">
+  數據總筆數 (Total number of records)
+</ResponseField>
+
+<ResponseField name="start" type="number">
+  當前數據開始筆數 (Current starting record number)
+</ResponseField>
+
+<ResponseField name="end" type="number">
+  當前數據結束筆數 (Current ending record number)
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  入仕途徑列表 (Array of entry path records)
+  
+  <Expandable title="Entry Path Object">
+    <ResponseField name="eId" type="number">
+      entry_code - 入仕途徑代碼
+    </ResponseField>
+    
+    <ResponseField name="eName" type="string">
+      入仕途徑名稱（英文）
+    </ResponseField>
+    
+    <ResponseField name="eNameChn" type="string">
+      入仕途徑名稱（中文）
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+# Get all entry paths under "科舉門" (Examination path)
+curl "https://input.cbdb.fas.harvard.edu/api/entry_list?id=04"
+
+# Get all entry paths under "科舉門-制舉" (Special examinations)
+curl "https://input.cbdb.fas.harvard.edu/api/entry_list?id=0403"
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "total": 100,
+  "start": 1,
+  "end": 2,
+  "data": [
+    {
+      "eId": "47",
+      "eName": "school: licentiate ",
+      "eNameChn": "學校：生員（庠生）"
+    },
+    {
+      "eId": "173",
+      "eName": "county school student",
+      "eNameChn": "縣學生員"
+    }
+  ]
+}
+```
+</ResponseExample>

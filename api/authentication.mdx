@@ -1,0 +1,277 @@
+---
+title: 'Authentication'
+description: 'Authentication methods and access control for the CBDB API'
+---
+
+## Overview
+
+The CBDB Online Input System API uses **optional authentication** for most endpoints. This means:
+
+- **Public endpoints**: Accessible without authentication
+- **Authenticated endpoints**: Require Laravel Sanctum token authentication
+- **Protected endpoints**: Require valid user credentials
+
+## Authentication Methods
+
+### 1. No Authentication (Public Access)
+
+Most query endpoints are publicly accessible without authentication:
+
+```bash
+# Public endpoint - no authentication needed
+curl "https://input.cbdb.fas.harvard.edu/api/post_list?id=06&start=0&list=100"
+```
+
+Public endpoints include:
+- Office and entry path listings
+- Place searches
+- Relationship queries
+- Social network queries
+
+### 2. Optional Authentication
+
+Some endpoints support **optional authentication** using the `auth.optional` middleware. These endpoints work without authentication but may provide additional features or data when authenticated.
+
+<Info>
+  Optional authentication endpoints are marked with the `auth.optional` middleware in the routing configuration.
+</Info>
+
+### 3. Laravel Sanctum (Token Authentication)
+
+For authenticated endpoints, the API uses [Laravel Sanctum](https://laravel.com/docs/sanctum) for token-based authentication.
+
+#### Getting an Authentication Token
+
+**Step 1**: Login to obtain a token
+
+```bash
+curl -X POST https://input.cbdb.fas.harvard.edu/api/v1/user/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "your-password"
+  }'
+```
+
+**Response**:
+
+```json
+{
+  "token": "1|abc123def456...",
+  "user": {
+    "id": 1,
+    "name": "John Doe",
+    "email": "user@example.com"
+  }
+}
+```
+
+**Step 2**: Use the token in subsequent requests
+
+```bash
+curl https://input.cbdb.fas.harvard.edu/api/user \
+  -H "Authorization: Bearer 1|abc123def456..."
+```
+
+## Public vs Authenticated Endpoints
+
+### Public Endpoints
+
+These endpoints are accessible without authentication:
+
+<CodeGroup>
+```bash Offices
+curl "https://input.cbdb.fas.harvard.edu/api/post_list?id=06&start=0&list=100"
+```
+
+```bash Entry Paths
+curl "https://input.cbdb.fas.harvard.edu/api/entry_list?id=04"
+```
+
+```bash Places
+curl "https://input.cbdb.fas.harvard.edu/api/place_list?name=Puer&accurate=0"
+```
+
+```bash Relationships
+curl -X POST https://input.cbdb.fas.harvard.edu/api/query_relatives_2 \
+  -H "Content-Type: application/json" \
+  -d '{"people":[1762],"mCircle":0,"MAncGen":1,"MDecGen":1,"MColLink":1,"MMarLink":1,"MLoop":2}'
+```
+</CodeGroup>
+
+### Authenticated Endpoints
+
+These endpoints require authentication:
+
+<CodeGroup>
+```bash User Profile
+curl https://input.cbdb.fas.harvard.edu/api/user \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```bash Operations
+curl -X POST https://input.cbdb.fas.harvard.edu/api/operations/add \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"resource_type":"BIOG_MAIN","resource_id":"1234"}'
+```
+</CodeGroup>
+
+## Optional Authentication Endpoints
+
+The following endpoints support optional authentication through the `auth.optional` middleware:
+
+<AccordionGroup>
+  <Accordion title="Select Endpoints" icon="list">
+    - `/api/select/ethnicity`
+    - `/api/select/choronym`
+    - `/api/select/dynasty`
+    - `/api/select/nianhao`
+    - `/api/select/codes`
+    - `/api/select/biogaddr`
+    - `/api/select/role`
+    - `/api/select/range`
+    - And more...
+  </Accordion>
+  
+  <Accordion title="Search Endpoints" icon="magnifying-glass">
+    - `/api/select/search/addr`
+    - `/api/select/search/text`
+    - `/api/select/search/office`
+    - `/api/select/search/entry`
+    - `/api/select/search/biog`
+    - And more...
+  </Accordion>
+</AccordionGroup>
+
+These endpoints work without authentication but may provide enhanced functionality when a valid token is provided.
+
+## Error Responses
+
+### Authentication Errors
+
+When authentication fails, the API returns appropriate error responses:
+
+#### 401 Unauthorized
+
+```json
+{
+  "message": "Unauthenticated."
+}
+```
+
+**Cause**: Missing or invalid authentication token
+
+**Solution**: Provide a valid Bearer token in the `Authorization` header
+
+#### 403 Forbidden
+
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+**Cause**: Valid token but insufficient permissions
+
+**Solution**: Contact the administrator to request appropriate access rights
+
+#### 422 Unprocessable Entity
+
+```json
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "email": ["The email field is required."],
+    "password": ["The password field is required."]
+  }
+}
+```
+
+**Cause**: Invalid login credentials or missing required fields
+
+**Solution**: Check your request parameters and credentials
+
+## Security Best Practices
+
+<Warning>
+  **Keep your API tokens secure!** Never expose tokens in client-side code or public repositories.
+</Warning>
+
+### Recommendations
+
+1. **Store tokens securely**: Use environment variables or secure credential storage
+2. **Use HTTPS**: Always make API requests over HTTPS
+3. **Token rotation**: Regularly regenerate tokens for long-lived applications
+4. **Scope limitation**: Request only the minimum required permissions
+5. **Monitor usage**: Track API usage to detect unauthorized access
+
+### Example: Secure Token Storage
+
+```bash
+# Store token in environment variable
+export CBDB_API_TOKEN="1|abc123def456..."
+
+# Use in scripts
+curl https://input.cbdb.fas.harvard.edu/api/user \
+  -H "Authorization: Bearer $CBDB_API_TOKEN"
+```
+
+## Token Management
+
+### Token Expiration
+
+Sanctum tokens do not expire by default. However, administrators may configure token expiration policies:
+
+- Session-based expiration
+- Time-based expiration (e.g., 30 days)
+- Activity-based expiration
+
+Check with your system administrator for token expiration policies.
+
+### Revoking Tokens
+
+If a token is compromised, contact the system administrator to revoke it immediately.
+
+## Guest Access vs Authenticated Access
+
+Some endpoints use the `guest` middleware, which means they are **only accessible without authentication** (typically for login/registration endpoints):
+
+```bash
+# Login endpoint (guest middleware)
+curl -X POST https://input.cbdb.fas.harvard.edu/api/v1/user/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"password"}'
+```
+
+If you attempt to access a `guest` endpoint while authenticated, you will receive a redirect or error.
+
+## Testing Authentication
+
+You can test your authentication setup with a simple request:
+
+```bash
+# Test without authentication (should fail)
+curl https://input.cbdb.fas.harvard.edu/api/user
+
+# Test with authentication (should succeed)
+curl https://input.cbdb.fas.harvard.edu/api/user \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Overview" icon="book" href="/api/overview">
+    Learn about API structure and response formats
+  </Card>
+  <Card title="Offices & Postings" icon="building" href="/api/offices/list-by-category">
+    Start querying office data
+  </Card>
+  <Card title="Entry Paths" icon="door-open" href="/api/entries/list-by-category">
+    Query entry path data
+  </Card>
+  <Card title="Places" icon="map-location-dot" href="/api/places/search">
+    Search geographical locations
+  </Card>
+</CardGroup>

@@ -1,0 +1,516 @@
+---
+title: '搜尋與查詢'
+description: '掌握 CBDB Online Input System 的高效搜尋技巧和進階查詢功能'
+icon: 'magnifying-glass'
+---
+
+## 概述
+
+CBDB Online Input System 提供強大的搜尋和查詢功能，幫助您快速定位和分析歷史人物資料。本指南涵蓋從基本姓名搜尋到複雜的多條件檢索，以及檢視表查詢和結果匯出。
+
+## 人物姓名搜尋
+
+### 基本搜尋
+
+人物基本資料頁面（`/basicinformation`）提供高效的姓名搜尋功能。
+
+<Steps>
+  <Step title="進入搜尋頁面">
+    導航至「人物基本資料」模組，在頁面頂部找到搜尋框。
+  </Step>
+  
+  <Step title="輸入搜尋關鍵字">
+    支援多種輸入方式：
+    
+    <Tabs>
+      <Tab title="中文姓名">
+        直接輸入中文姓名或其部分：
+        - `王安石`（完整姓名）
+        - `王` 或 `安石`（部分匹配）
+        - `德明`（別名）
+        
+        系統支援**後綴匹配**，可找到名字包含該字的所有人物。
+      </Tab>
+      
+      <Tab title="拼音">
+        輸入拼音（不區分大小寫）：
+        - `wang anshi`
+        - `wanganshi`
+        - `anshi`
+        
+        系統會自動處理空格和連寫。
+      </Tab>
+      
+      <Tab title="Person ID">
+        直接輸入 Person ID 進行精確查詢：
+        - `123456`
+        
+        這是最快速的定位方式。
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step title="查看搜尋結果">
+    系統顯示匹配的人物列表，包含：
+    - Person ID
+    - 中文姓名
+    - 拼音姓名
+    - 朝代
+    - 生卒年
+    
+    預設每頁顯示 20 筆，可調整為 50 或 100 筆。
+  </Step>
+</Steps>
+
+### 搜尋技術原理
+
+<Accordion title="CBDB 姓名搜尋索引 (CBDB__NAME_FTS)">
+  系統使用專門的倒排索引表 `CBDB__NAME_FTS` 提供高效搜尋：
+  
+  **索引內容**：
+  - 中文姓名的所有後綴（如「王安石」→「王安石」、「安石」、「石」）
+  - 拼音的所有後綴（如「wanganshi」→「wanganshi」、「anshi」、「shi」）
+  - 別名 (ALTNAME_DATA)
+  
+  **效能優勢**：
+  - 避免 LIKE '%keyword%' 的全表掃描
+  - 支援數百萬記錄的秒級查詢
+  - 自動處理繁簡轉換（基於 OpenCC 標準）
+  
+  **維護**：
+  - 新增/修改人物時自動更新索引
+  - 管理員可透過 `/admin/cbdb-table-maintenance` 重建索引
+</Accordion>
+
+### 朝代篩選
+
+搜尋結果可依朝代進一步篩選：
+
+<Steps>
+  <Step title="輸入搜尋關鍵字">
+    先執行姓名搜尋，系統會統計各朝代的匹配數量。
+  </Step>
+  
+  <Step title="選擇朝代">
+    在搜尋框下方會出現朝代篩選下拉選單，顯示：
+    ```plaintext
+    唐 (125)      # 朝代名稱（匹配人數）
+    宋 (342)
+    明 (89)
+    ```
+    
+    選擇特定朝代後，結果會即時更新。
+  </Step>
+  
+  <Step title="清除篩選">
+    點擊「清除」或重新搜尋，移除朝代限制。
+  </Step>
+</Steps>
+
+<Info>
+朝代篩選使用 URL 查詢參數 `?q=關鍵字&c_dy=朝代ID`，可以直接分享特定篩選結果的連結。
+</Info>
+
+## 進階搜尋
+
+### 按入仕方式查詢
+
+專門的入仕查詢功能（`/search-by/entry`）允許您依科舉、蔭補等方式檢索人物。
+
+<Steps>
+  <Step title="進入入仕查詢頁面">
+    從主選單導航至「搜尋 → 按入仕方式」。
+  </Step>
+  
+  <Step title="選擇入仕類型">
+    系統提供多級篩選：
+    
+    <CardGroup cols={2}>
+      <Card title="入仕大類" icon="layer-group">
+        - 科舉
+        - 蔭補
+        - 薦舉
+        - 其他
+      </Card>
+      
+      <Card title="具體代碼" icon="hashtag">
+        選擇大類後，下拉選單載入對應的詳細代碼：
+        - 進士
+        - 舉人
+        - 明經
+        - 等等...
+      </Card>
+    </CardGroup>
+  </Step>
+  
+  <Step title="設定時間範圍（可選）">
+    輸入起始年份和終止年份，限制搜尋範圍。
+  </Step>
+  
+  <Step title="執行查詢">
+    點擊「搜尋」按鈕，系統返回匹配的人物清單，包含：
+    - Person ID 和姓名
+    - 入仕年份
+    - 入仕方式描述
+    - 來源文獻
+  </Step>
+</Steps>
+
+### 檢視表查詢
+
+檢視表（View Tables）提供預先定義的複雜查詢，整合多個資料表的資訊。
+
+#### 訪問檢視表
+
+<Tabs>
+  <Tab title="檢視表列表">
+    訪問 `/view` 查看所有可用的檢視表：
+    
+    <CardGroup cols={2}>
+      <Card title="別名資料檢視" icon="signature">
+        `/view/altname-data`
+        
+        彙整人物別名及其來源資訊
+      </Card>
+      
+      <Card title="社會關係資料檢視" icon="handshake">
+        `/view/assoc-data`
+        
+        顯示人物社會交往和關係網絡
+      </Card>
+      
+      <Card title="人物地址資料檢視" icon="location-dot">
+        `/view/biog-addr-data`
+        
+        查詢人物的籍貫和居住地
+      </Card>
+      
+      <Card title="任官資料檢視" icon="landmark">
+        `/view/office-data`
+        
+        檢索官職履歷和任職地點
+      </Card>
+    </CardGroup>
+    
+    <Note>
+    完整檢視表清單請參考 [檢視表總覽文檔](https://github.com/cbdb-project/cbdb-online-main-server/blob/main/docs/VIEWS.md)。
+    </Note>
+  </Tab>
+  
+  <Tab title="單一檢視表">
+    點擊特定檢視表進入詳細查詢頁面，例如 `/view/assoc-data`。
+    
+    頁面顯示：
+    - **資料表格**：分頁顯示所有記錄
+    - **欄位說明**：各欄位的中英文對照
+    - **搜尋功能**：快速篩選特定記錄
+    - **SQL 查看**：點擊右上角「顯示 SQL」查看實際執行的查詢語句
+  </Tab>
+</Tabs>
+
+#### 檢視表搜尋
+
+大多數檢視表支援全文搜尋：
+
+<Steps>
+  <Step title="輸入搜尋關鍵字">
+    在檢視表頁面頂部的搜尋框中輸入關鍵字。
+  </Step>
+  
+  <Step title="選擇搜尋欄位">
+    系統會在可搜尋欄位中查找匹配：
+    - Person ID
+    - 姓名（中文、拼音）
+    - 朝代
+    - 其他相關欄位（依檢視表而定）
+    
+    可搜尋欄位定義於 `config/view_table_searchable.php`。
+  </Step>
+  
+  <Step title="查看結果">
+    結果會即時過濾，保持分頁結構。
+  </Step>
+</Steps>
+
+<Accordion title="檢視表技術說明">
+  - **資料來源**：部分檢視表使用資料庫 VIEW（如 `View_AltnameData`），部分使用 Query Builder 動態組合
+  - **效能優化**：配置適當的索引以加速檢視表查詢
+  - **自訂檢視**：管理員可透過 `config/view_tables.php` 新增或調整檢視表定義
+</Accordion>
+
+## SQL 查詢遊樂場
+
+<Warning>
+此功能僅限**活躍的專家用戶**和**系統管理員**使用。
+</Warning>
+
+SQL 查詢遊樂場（`/query-playground`）允許進階使用者執行自訂 SQL 查詢。
+
+### 執行自訂查詢
+
+<Steps>
+  <Step title="進入查詢遊樂場">
+    導航至 `/query-playground`。
+  </Step>
+  
+  <Step title="撰寫 SQL 查詢">
+    在編輯器中輸入 SELECT 或 WITH 語句：
+    
+    <CodeGroup>
+    ```sql 範例：查詢宋代進士
+    SELECT 
+        bm.c_personid,
+        bm.c_name_chn,
+        bm.c_name,
+        d.c_dynasty_chn,
+        ed.c_entry_code,
+        ec.c_entry_desc_chn
+    FROM BIOG_MAIN bm
+    JOIN DYNASTIES d ON bm.c_dy = d.c_dy
+    JOIN ENTRY_DATA ed ON bm.c_personid = ed.c_personid
+    JOIN ENTRY_CODES ec ON ed.c_entry_code = ec.c_entry_code
+    WHERE d.c_dynasty_chn = '宋'
+      AND ec.c_entry_desc_chn LIKE '%進士%'
+    LIMIT 100;
+    ```
+    
+    ```sql 範例：統計各朝代人數
+    SELECT 
+        d.c_dynasty_chn AS 朝代,
+        COUNT(*) AS 人數
+    FROM BIOG_MAIN bm
+    JOIN DYNASTIES d ON bm.c_dy = d.c_dy
+    WHERE bm.c_name_chn != '<待删除>'
+    GROUP BY d.c_dynasty_chn
+    ORDER BY COUNT(*) DESC;
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="執行查詢">
+    點擊「執行」按鈕，系統會：
+    - 驗證 SQL 語法
+    - 執行查詢（設定超時保護）
+    - 顯示結果表格
+    - 記錄查詢日誌
+  </Step>
+  
+  <Step title="匯出結果">
+    查詢成功後，可將結果匯出為 CSV 或 Excel 格式。
+  </Step>
+</Steps>
+
+<Warning>
+查詢遊樂場僅支援 **SELECT** 和 **WITH** 語句，禁止 INSERT、UPDATE、DELETE 等寫入操作。
+
+系統會自動過濾危險語句，確保資料安全。
+</Warning>
+
+### EXPLAIN 分析
+
+管理員可使用 `/admin/explainsql` 分析查詢效能：
+
+<Steps>
+  <Step title="進入 EXPLAIN 工具">
+    導航至 `/admin/explainsql`（僅限管理員）。
+  </Step>
+  
+  <Step title="輸入 SELECT 查詢">
+    貼上需要分析的 SQL 語句。
+  </Step>
+  
+  <Step title="查看執行計畫">
+    系統執行 `EXPLAIN` 並顯示：
+    - 表格掃描方式（全表掃描、索引掃描等）
+    - 索引使用情況
+    - 估計行數
+    - 執行成本
+  </Step>
+  
+  <Step title="優化查詢">
+    根據執行計畫調整查詢或新增索引以提升效能。
+  </Step>
+</Steps>
+
+## 匯出查詢結果
+
+### 基本匯出
+
+大多數查詢頁面提供匯出功能：
+
+<Tabs>
+  <Tab title="CSV 格式">
+    **優點**：
+    - 檔案小，傳輸快速
+    - 適合程式化處理
+    - 跨平台兼容性好
+    
+    **使用場景**：
+    - 大量資料匯出
+    - 需要進一步處理的資料
+    - 與其他系統整合
+  </Tab>
+  
+  <Tab title="Excel 格式">
+    **優點**：
+    - 保留格式和樣式
+    - 直接在 Excel 中開啟
+    - 支援中文顯示
+    
+    **使用場景**：
+    - 報告和簡報
+    - 資料分析和視覺化
+    - 非技術人員使用
+  </Tab>
+</Tabs>
+
+### 匯出限制
+
+<Warning>
+為保護系統效能，單次匯出可能有以下限制：
+- **最大行數**：10,000 ~ 50,000（依檢視表而定）
+- **超時時間**：60 秒
+- **檔案大小**：建議不超過 50 MB
+
+如需匯出完整資料集，請聯繫系統管理員使用資料庫匯出工具。
+</Warning>
+
+## 公開 API 查詢
+
+CBDB 提供公開 API 供外部系統整合。
+
+### Person API (v1)
+
+**端點**：`/cbdbapi/person.php` 或 `/cbdbapi/person`
+
+**查詢參數**：
+- `id`：Person ID（單一或多個，逗號分隔）
+- `name`：姓名（中文或拼音）
+- `limit`：返回數量上限
+
+<CodeGroup>
+```bash 範例：按 ID 查詢
+curl "https://input.cbdb.fas.harvard.edu/cbdbapi/person?id=123456"
+```
+
+```bash 範例：按姓名查詢
+curl "https://input.cbdb.fas.harvard.edu/cbdbapi/person?name=王安石&limit=10"
+```
+
+```json 回應格式
+{
+  "data": [
+    {
+      "c_personid": 123456,
+      "c_name_chn": "王安石",
+      "c_name": "Wang Anshi",
+      "c_dy": 16,
+      "c_birthyear": 1021,
+      "c_deathyear": 1086,
+      "c_index_year": 1053,
+      ...
+    }
+  ],
+  "count": 1
+}
+```
+</CodeGroup>
+
+詳細 API 文檔請參考 [CBDB Public API v1 說明](https://github.com/cbdb-project/cbdb-online-main-server/blob/main/docs/CBDB_PUBLIC_API_V1.md)。
+
+### Mutate API (v2)
+
+<Warning>
+Mutate API 用於程式化資料修改，需要 API Token 認證，僅限授權應用程式使用。
+</Warning>
+
+**端點**：`POST /api/v2/mutate`
+
+**認證方式**：Bearer Token（從 `/api-tokens` 管理頁面生成）
+
+**支援操作**：
+- 新增人物記錄
+- 更新現有資料
+- 批次操作
+
+詳細文檔請參考 [API 參考 → 認證](/api/authentication)。
+
+## 搜尋最佳實踐
+
+<CardGroup cols={2}>
+  <Card title="使用後綴匹配" icon="text-slash">
+    輸入姓名的後半部分（如「安石」而非「王」），可減少無關結果。
+    
+    CBDB 的索引特別優化了後綴搜尋。
+  </Card>
+  
+  <Card title="結合朝代篩選" icon="filter">
+    先執行姓名搜尋，再用朝代縮小範圍，比直接輸入朝代 + 姓名更高效。
+  </Card>
+  
+  <Card title="優先使用 Person ID" icon="hashtag">
+    如果已知 Person ID，直接輸入是最快速準確的查詢方式。
+  </Card>
+  
+  <Card title="善用檢視表" icon="table">
+    對於複雜的關聯查詢，使用預定義的檢視表而非手寫 SQL，可確保查詢效率。
+  </Card>
+</CardGroup>
+
+<AccordionGroup>
+  <Accordion title="如何查詢某人的所有親屬？">
+    1. 訪問 `/view/kinship-data`（親屬關係檢視）
+    2. 在搜尋框輸入該人物的 Person ID 或姓名
+    3. 結果會顯示所有雙向親屬關係
+    
+    或者使用 SQL 查詢遊樂場：
+    ```sql
+    SELECT * FROM KIN_DATA WHERE c_personid = 123456 OR c_kin_id = 123456;
+    ```
+  </Accordion>
+  
+  <Accordion title="如何找到某地區的所有官員？">
+    1. 訪問 `/view/office-data`（任官資料檢視）
+    2. 在搜尋框輸入地名（如「杭州」）
+    3. 系統會在任職地點欄位中搜尋匹配
+    
+    或使用 Person API 配合地址篩選。
+  </Accordion>
+  
+  <Accordion title="如何匯出完整的人物資料庫？">
+    CBDB 每週自動匯出 SQLite 版本到 HuggingFace：
+    - 下載地址：[https://huggingface.co/datasets/cbdb/cbdb-sqlite](https://huggingface.co/datasets/cbdb/cbdb-sqlite)
+    - 或直接訪問：[https://input.cbdb.fas.harvard.edu/latest.zip](https://input.cbdb.fas.harvard.edu/latest.zip)
+    
+    詳細說明請參考 [SQLite 數據發佈流程](https://github.com/cbdb-project/cbdb-online-main-server/blob/main/docs/SQLITE_DATA_RELEASE.md)。
+  </Accordion>
+  
+  <Accordion title="搜尋結果為什麼不包含某些人物？">
+    可能原因：
+    1. **已刪除記錄**：`c_name_chn = '<待删除>'` 的記錄會被自動排除
+    2. **索引未更新**：新增/修改的記錄需要重建搜尋索引
+    3. **輸入方式問題**：嘗試不同的搜尋關鍵字或拼音
+    
+    如確認資料存在但搜尋不到，請聯繫管理員重建 `CBDB__NAME_FTS` 索引。
+  </Accordion>
+</AccordionGroup>
+
+## 相關資源
+
+<CardGroup cols={2}>
+  <Card title="資料錄入" icon="pen-to-square" href="/user-guide/data-entry">
+    了解如何建立可搜尋的人物記錄
+  </Card>
+  
+  <Card title="管理記錄" icon="folder-tree" href="/user-guide/managing-records">
+    學習如何編輯搜尋到的記錄
+  </Card>
+  
+  <Card title="API 參考" icon="code" href="/api/overview">
+    透過 API 進行程式化查詢
+  </Card>
+  
+  <Card title="檢視表文檔" icon="book" href="https://github.com/cbdb-project/cbdb-online-main-server/blob/main/docs/VIEWS.md">
+    完整檢視表說明
+  </Card>
+</CardGroup>

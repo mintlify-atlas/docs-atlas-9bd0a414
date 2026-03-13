@@ -1,0 +1,419 @@
+---
+title: Authentication
+description: Understanding user roles, permissions, and account management in CBDB Online
+---
+
+## User Roles and Permissions
+
+CBDB Online implements a role-based access control system with four distinct user roles, each with specific capabilities and restrictions.
+
+### Role Overview
+
+<CardGroup cols={2}>
+  <Card title="Regular User" icon="user">
+    **Role Code**: `0` (`User::ROLE_REGULAR`)
+    
+    Can directly create and edit biographical records. Suitable for trusted researchers and contributors.
+  </Card>
+  
+  <Card title="Expert User" icon="user-graduate">
+    **Role Code**: `1` (`User::ROLE_EXPERT`)
+    
+    Has all regular user permissions plus administrative capabilities including proposal review and user management.
+  </Card>
+  
+  <Card title="Crowdsourcing User" icon="users">
+    **Role Code**: `2` (`User::ROLE_CROWDSOURCING`)
+    
+    Submits proposals that require expert approval before being applied to the database.
+  </Card>
+  
+  <Card title="Super Admin" icon="user-shield">
+    **Role Code**: `3` (`User::ROLE_SUPER_ADMIN`)
+    
+    Highest privilege level with all expert permissions. Can be used for specialized system administration tasks.
+  </Card>
+</CardGroup>
+
+## Activation Status
+
+In addition to roles, every user has an activation status that determines whether they can perform write operations:
+
+| Status | Value | Constant | Description |
+|--------|-------|----------|-------------|
+| **Inactive** | `0` | `User::STATUS_INACTIVE` | Can log in but cannot create or modify any data. Default state for new accounts. |
+| **Active** | `1` | `User::STATUS_ACTIVE` | Fully active account. Can perform operations according to their role. |
+| **Reserved** | `2` | `User::STATUS_RESERVED` | Reserved for future use (currently treated as inactive). |
+
+<Warning>
+  Only users with `is_active = 1` can write data. An expert user with `is_active = 0` cannot perform any modifications despite having the expert role.
+</Warning>
+
+## Permission Matrix
+
+Here's what each role can do when active (`is_active = 1`):
+
+| Capability | Regular | Expert | Crowdsourcing | Super Admin |
+|------------|---------|--------|---------------|-------------|
+| **View biographical data** | ✅ | ✅ | ✅ | ✅ |
+| **Directly edit records** | ✅ | ✅ | ❌ | ✅ |
+| **Submit proposals** | ✅ | ✅ | ✅ | ✅ |
+| **Review and approve proposals** | ❌ | ✅ | ❌ | ✅ |
+| **Restore operations** | ❌ | ✅ | ❌ | ✅ |
+| **Manage users** | ❌ | ✅ | ❌ | ✅ |
+| **Access admin tools** | ❌ | ✅ | ❌ | ✅ |
+| **Run batch imports** | ❌ | ✅ | ❌ | ✅ |
+
+### Key Differences Explained
+
+<Accordion title="Regular vs. Crowdsourcing">
+  **Regular users** directly write to main data tables (`BIOG_MAIN`, `KIN_DATA`, etc.) and their changes are immediately visible.
+
+  **Crowdsourcing users** create entries in the `operations` table with `crowdsourcing_status = 2`. These proposals must be reviewed and confirmed by an expert before being applied to the main tables.
+</Accordion>
+
+<Accordion title="Expert vs. Super Admin">
+  Both roles have identical base permissions through the `isAdmin()` method. The super admin role is fully implemented at the model level and can be used to implement additional specialized permissions in the future.
+  
+  Use `isSuperAdmin()` for super-admin-only features, or `isAdmin()` for features available to both experts and super admins.
+</Accordion>
+
+## User Model Helper Methods
+
+The `User` model (`App\Models\User`) provides convenient methods for checking permissions in code:
+
+<CodeGroup>
+```php Role Checks
+// Check if user is active
+$user->isActive();              // true if is_active == 1
+
+// Check specific roles
+$user->isRegularUser();         // true if is_admin == 0
+$user->isExpert();              // true if is_admin == 1
+$user->isCrowdsourcingUser();   // true if is_admin == 2
+$user->isSuperAdmin();          // true if is_admin == 3
+$user->isAdmin();               // true if expert OR super admin
+```
+
+```php Permission Checks
+// Check specific capabilities
+$user->canWriteDirectly();      // Active AND not crowdsourcing
+$user->canManageUsers();        // Active AND (expert OR super admin)
+$user->canRestoreOperations();  // Active AND (expert OR super admin)
+$user->canRunBatchImport();     // Active AND (expert OR super admin)
+```
+
+```php Get Role Name
+// Get localized role name for display
+$user->getRoleName();
+// Returns: "一般" | "專家" | "眾包" | "系統管理員"
+```
+</CodeGroup>
+
+<Tip>
+  Always use these helper methods instead of directly checking `is_admin` values. This makes code more readable and future-proof.
+</Tip>
+
+## Managing User Accounts
+
+### Command Line Tool
+
+The system provides the `cbdb:manage-user` artisan command for creating and managing user accounts.
+
+<Tabs>
+  <Tab title="Interactive Mode">
+    Run the command without options for step-by-step prompts:
+
+    ```bash
+    php artisan cbdb:manage-user
+    ```
+
+    The command will ask for:
+    1. User email (required, used to identify the account)
+    2. User name
+    3. Password (minimum 6 characters)
+    4. Activation status (未激活 / 激活 / 預留)
+    5. User role (一般用戶 / 專家 / 眾包用戶 / 系統管理員)
+
+    If the email already exists, you'll be prompted to update the existing user.
+  </Tab>
+
+  <Tab title="Command Line Options">
+    Specify all parameters directly for automation:
+
+    ```bash
+    php artisan cbdb:manage-user \
+      --email=user@example.com \
+      --name="User Name" \
+      --password=secure_password \
+      --active=1 \
+      --role=expert
+    ```
+
+    Available options:
+    - `--email`: User email (required)
+    - `--name`: Display name
+    - `--password`: Password (min 6 characters)
+    - `--active`: `0` (inactive), `1` (active), `2` (reserved)
+    - `--role`: `regular`, `expert`, `crowdsourcing`, `super-admin`
+    - `--list`: List all users
+  </Tab>
+
+  <Tab title="List Users">
+    View all registered users:
+
+    ```bash
+    php artisan cbdb:manage-user --list
+    ```
+
+    Displays a table with:
+    - User ID
+    - Name
+    - Email
+    - Activation status
+    - Role
+  </Tab>
+</Tabs>
+
+### Common Management Tasks
+
+<Steps>
+  <Step title="Create Super Admin">
+    Create the first super admin account after installation:
+
+    ```bash
+    php artisan cbdb:manage-user \
+      --email=admin@yourdomain.com \
+      --name="System Administrator" \
+      --password=your_secure_password \
+      --active=1 \
+      --role=super-admin
+    ```
+  </Step>
+
+  <Step title="Create Expert User">
+    Add a trusted researcher with review permissions:
+
+    ```bash
+    php artisan cbdb:manage-user \
+      --email=expert@yourdomain.com \
+      --name="Expert Researcher" \
+      --password=expert_password \
+      --active=1 \
+      --role=expert
+    ```
+  </Step>
+
+  <Step title="Promote Existing User">
+    Upgrade a regular user to expert:
+
+    ```bash
+    php artisan cbdb:manage-user \
+      --email=user@example.com \
+      --role=expert
+    ```
+
+    <Note>
+      If you only specify changed fields, other fields remain unchanged.
+    </Note>
+  </Step>
+
+  <Step title="Deactivate User">
+    Temporarily disable a user account without deleting:
+
+    ```bash
+    php artisan cbdb:manage-user \
+      --email=user@example.com \
+      --active=0
+    ```
+  </Step>
+
+  <Step title="Reset Password">
+    Update a user's password:
+
+    ```bash
+    php artisan cbdb:manage-user \
+      --email=user@example.com \
+      --password=new_secure_password
+    ```
+  </Step>
+</Steps>
+
+## Email Verification
+
+New user accounts are created with a `confirmation_token` field. The system supports email verification workflows:
+
+1. When a user registers, a random 32-character token is generated
+2. The token is stored in the `confirmation_token` field
+3. An email can be sent with a verification link containing this token
+4. Upon verification, the account's `is_active` status can be set to `1`
+
+<Note>
+  The email sending functionality requires SMTP configuration in `.env`. See the Mail configuration section in the `.env.example` file.
+</Note>
+
+```bash .env
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.yourdomain.com
+MAIL_PORT=587
+MAIL_USERNAME=your_smtp_username
+MAIL_PASSWORD=your_smtp_password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=noreply@yourdomain.com
+MAIL_FROM_NAME="${APP_NAME}"
+```
+
+## User Management in Code
+
+For testing and internal tools, use the `UserFactory`:
+
+<CodeGroup>
+```php Create Test Users
+use App\Models\User;
+
+// Create active regular user
+$user = User::factory()->active()->regular()->create();
+
+// Create expert user
+$expert = User::factory()->active()->expert()->create();
+
+// Create crowdsourcing user
+$crowdsourcing = User::factory()->active()->crowdsourcing()->create();
+
+// Create super admin
+$admin = User::factory()->active()->superAdmin()->create();
+
+// Create with custom attributes
+$user = User::factory()->create([
+    'name' => 'Custom Name',
+    'email' => 'custom@example.com',
+]);
+```
+
+```php Authorization in Tests
+use Tests\TestCase;
+use App\Models\User;
+
+class MyTest extends TestCase
+{
+    public function test_expert_can_review_proposals()
+    {
+        $expert = User::factory()->active()->expert()->create();
+        
+        $response = $this->actingAs($expert)
+            ->post('/operations/restore/123');
+        
+        $response->assertSuccessful();
+    }
+}
+```
+
+```php Controller Authorization
+use Illuminate\Support\Facades\Auth;
+
+public function restore($id)
+{
+    // Check if user can restore operations
+    if (!Auth::user()->canRestoreOperations()) {
+        flash('您沒有權限執行此操作。', 'error');
+        return redirect()->back();
+    }
+    
+    // Proceed with restoration...
+}
+```
+</CodeGroup>
+
+## Security Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Strong Passwords">
+    Enforce minimum password requirements:
+    - At least 12 characters
+    - Mix of uppercase, lowercase, numbers, and symbols
+    - Avoid common passwords and personal information
+  </Accordion>
+
+  <Accordion title="Limit Admin Accounts">
+    - Only grant expert/super-admin roles to trusted users
+    - Regular users are sufficient for most contributors
+    - Periodically review admin user list with `--list` option
+  </Accordion>
+
+  <Accordion title="Enable HTTPS in Production">
+    Configure your web server (Caddy) to enforce HTTPS:
+    
+    ```bash .env
+    SESSION_SECURE_COOKIE=true
+    SESSION_DOMAIN=.yourdomain.com
+    ```
+  </Accordion>
+
+  <Accordion title="Monitor Operations Log">
+    All data modifications are logged in the `operations` table:
+    - Track who made changes and when
+    - Review proposals from crowdsourcing users
+    - Investigate suspicious activity
+  </Accordion>
+</AccordionGroup>
+
+## API Authentication
+
+For programmatic access, CBDB Online uses **Laravel Sanctum** for API token authentication:
+
+<Steps>
+  <Step title="Generate API Token">
+    Users can generate personal access tokens through the web interface or programmatically:
+
+    ```php
+    $token = $user->createToken('Token Name')->plainTextToken;
+    ```
+  </Step>
+
+  <Step title="Use Token in Requests">
+    Include the token in the `Authorization` header:
+
+    ```bash
+    curl -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+      https://input.cbdb.fas.harvard.edu/api/endpoint
+    ```
+  </Step>
+
+  <Step title="Revoke Tokens">
+    Tokens can be revoked through the web interface or:
+
+    ```php
+    // Revoke specific token
+    $user->tokens()->where('id', $tokenId)->delete();
+
+    // Revoke all tokens
+    $user->tokens()->delete();
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  API tokens inherit the permissions of the user account. A crowdsourcing user's API token can only submit proposals, not directly modify data.
+</Note>
+
+## Next Steps
+
+Now that you understand authentication:
+
+<CardGroup cols={2}>
+  <Card title="Data Entry Guide" icon="pen-to-square" href="/user-guide/data-entry">
+    Learn how to enter biographical data
+  </Card>
+  
+  <Card title="User Roles Guide" icon="users" href="/user-guide/user-roles">
+    Detailed explanation of role workflows
+  </Card>
+  
+  <Card title="User Management" icon="user-gear" href="/admin/user-management">
+    Admin guide for managing users
+  </Card>
+  
+  <Card title="API Authentication" icon="key" href="/api/authentication">
+    API token authentication details
+  </Card>
+</CardGroup>

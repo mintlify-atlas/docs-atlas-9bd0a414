@@ -1,0 +1,130 @@
+---
+title: Introduction
+description: Welcome to CBDB Online Input System - A collaborative platform for managing biographical data of historical Chinese figures
+---
+
+## What is CBDB Online?
+
+CBDB Online Input System is a web-based platform for managing and contributing to the **China Biographical Database (CBDB)**, a collaborative research database of biographical information about historical Chinese figures from the 7th through 19th centuries.
+
+The input system provides a comprehensive interface for researchers and scholars to:
+
+- **Enter and edit biographical data** of historical Chinese figures
+- **Manage complex relationships** including kinship, associations, and social networks
+- **Track official appointments** (postings and offices) with temporal and geographical context
+- **Document alternate names** and various forms of personal identifiers
+- **Record textual references** and scholarly sources
+- **Collaborate through proposals** with expert review and approval workflows
+
+<Note>
+  The system is built on Laravel 12.x with PHP 8.2+ and uses MariaDB for data persistence. All biographical data follows structured schemas optimized for historical research.
+</Note>
+
+## Key Features
+
+The platform offers powerful features designed for academic research:
+
+<CardGroup cols={2}>
+  <Card title="Structured Data Entry" icon="database">
+    Enter biographical information with validated fields for dates, places, relationships, and official positions using standardized code tables
+  </Card>
+  
+  <Card title="Operations History" icon="clock-rotate-left">
+    Every data modification is logged with full audit trails. Experts can review and restore previous versions of records
+  </Card>
+  
+  <Card title="Role-Based Permissions" icon="users">
+    Four user roles (regular, expert, crowdsourcing, super-admin) with granular permissions for data entry, review, and administration
+  </Card>
+  
+  <Card title="Advanced Search" icon="magnifying-glass">
+    Search across biographical data with support for Chinese characters, pinyin, and complex queries using full-text indexing
+  </Card>
+  
+  <Card title="Crowdsourcing Workflow" icon="handshake">
+    Crowdsourcing users submit proposals that are reviewed by experts before being applied to the main database
+  </Card>
+  
+  <Card title="Data Export" icon="download">
+    Weekly automated exports to SQLite format, published to HuggingFace for public access and research use
+  </Card>
+</CardGroup>
+
+## Who Should Use This System?
+
+### Researchers and Scholars
+
+If you study Chinese history, particularly from the 7th through 19th centuries, this system provides:
+
+- A centralized platform for contributing biographical discoveries
+- Access to structured data suitable for quantitative analysis
+- Tools for tracking relationships and social networks across dynasties
+
+### Data Contributors
+
+Whether you're a graduate student, independent researcher, or crowdsourcing volunteer:
+
+- **Regular users** can directly enter and edit biographical records
+- **Crowdsourcing users** submit proposals reviewed by experts
+- **Experts** can review, approve, and manage all contributions
+
+### Administrators
+
+System administrators and database managers can:
+
+- Manage user accounts and permissions
+- Monitor operations history and audit logs
+- Perform batch imports and data maintenance
+- Configure code tables and system settings
+
+## Data Structure
+
+The system organizes biographical information into several core categories:
+
+- **Basic Information** (`BIOG_MAIN`): Names, dates, ethnicity, geographic origins
+- **Kinship** (`KIN_DATA`): Family relationships following traditional mourning system classifications
+- **Offices and Postings** (`POSTING_DATA`, `POSTED_TO_OFFICE_DATA`, `POSTED_TO_ADDR_DATA`): Official appointments with temporal and geographic details
+- **Alternate Names** (`ALTNAME_DATA`): Various name forms including style names, courtesy names, posthumous names
+- **Associations** (`ASSOC_DATA`): Social relationships including teachers, students, colleagues
+- **Entry Paths** (`ENTRY_DATA`): Examination results and paths to official service
+- **Texts** (`TEXT_CODES`, `TEXT_INSTANCE_DATA`): Authored works and textual references
+
+<Warning>
+  The database uses both single-key and **composite primary key tables**. Composite key tables (like `ALTNAME_DATA`, `POSTED_TO_ADDR_DATA`) require special handling and cannot use standard Eloquent ORM methods.
+</Warning>
+
+## Technology Stack
+
+- **Backend**: Laravel 12.x (PHP 8.2+, recommend 8.4)
+- **Database**: MariaDB 10.3.39 (production), SQLite (testing)
+- **Frontend**: AdminLTE 3 (Bootstrap 4), Vue 3, Vite build system
+- **Web Server**: Caddy (production)
+- **Authentication**: Laravel Sanctum for API tokens, built-in auth for web
+
+## Open Source and Licensing
+
+The CBDB Online Input System is open source under the [CC BY-NC-SA 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/) license.
+
+<CardGroup cols={2}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/cbdb-project/cbdb-online-main-server">
+    View the source code and contribute to development
+  </Card>
+  
+  <Card title="Public Data Access" icon="database" href="https://huggingface.co/datasets/cbdb/cbdb-sqlite">
+    Download weekly SQLite exports from HuggingFace
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+Ready to get started? Follow our setup guides:
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="server" href="/installation">
+    Set up the development environment and install dependencies
+  </Card>
+  
+  <Card title="Authentication" icon="key" href="/authentication">
+    Learn about user roles and account management
+  </Card>
+</CardGroup>

@@ -1,0 +1,299 @@
+---
+title: 用戶管理
+description: 管理系統用戶帳號、角色權限與啟用狀態
+---
+
+用戶管理功能允許管理員創建、更新用戶帳號，設定角色權限與啟用狀態。CBDB Online 系統支援四種用戶角色，並提供命令行工具與網頁界面管理用戶。
+
+## 用戶角色概覽
+
+CBDB Online 系統支援以下四種用戶角色：
+
+<CardGroup cols={2}>
+  <Card title="一般用戶" icon="user">
+    可直接新增或修改基本資料、代碼表等模組。所有操作會直接寫入資料表並記錄於 operations。
+  </Card>
+  
+  <Card title="專家用戶" icon="user-tie">
+    擁有一般用戶權限，並可審核提案、管理用戶帳號、執行操作復原及使用批次匯入工具。
+  </Card>
+  
+  <Card title="眾包用戶" icon="users">
+    前台可編輯，但提交內容會轉成待審核提案 (crowdsourcing_status = 2)，需等待專家審核後套用。
+  </Card>
+  
+  <Card title="系統管理員" icon="user-shield">
+    擁有與專家相同的基礎權限，可用於區分更高階的管理功能（如審計日誌查看）。
+  </Card>
+</CardGroup>
+
+## 帳號啟用狀態
+
+用戶帳號有三種啟用狀態：
+
+| 狀態值 | 名稱 | 說明 |
+|-------|------|------|
+| `0` | 未啟用 | 預設值、待審或停用狀態。可登入但所有寫入動作會被 Controller 拒絕 |
+| `1` | 已啟用 | 正式啟用。能照角色權限執行對資料庫的新增/修改 |
+| `2` | 預留 | 目前程式視同未啟用，不具任何寫入權限 |
+
+<Warning>
+  只有 `is_active = 1` 的用戶才能執行資料寫入操作。即使是專家或系統管理員，若帳號未啟用也無法修改資料。
+</Warning>
+
+## 使用命令行管理用戶
+
+### cbdb:manage-user 命令
+
+`cbdb:manage-user` 是 CBDB Online 的用戶管理命令行工具，適用於環境初始設定和日常用戶管理。此命令可在生產環境正常運行，無需依賴開發環境的 Factory 組件。
+
+#### 交互式模式
+
+直接運行命令，系統會逐步詢問所需信息：
+
+```bash
+php artisan cbdb:manage-user
+```
+
+系統會依次詢問：
+1. Email（必填）
+2. 用戶名稱
+3. 密碼（至少 6 個字符）
+4. 激活狀態（未激活 / 激活 / 預留）
+5. 用戶角色（一般 / 專家 / 眾包 / 系統管理員）
+
+#### 命令行選項模式
+
+使用選項直接指定參數，適合腳本自動化：
+
+<CodeGroup>
+```bash 創建系統管理員
+php artisan cbdb:manage-user \
+  --email=admin@example.com \
+  --name="系統管理員" \
+  --password=secret123 \
+  --active=1 \
+  --role=super-admin
+```
+
+```bash 創建專家用戶
+php artisan cbdb:manage-user \
+  --email=expert@example.com \
+  --name="專家用戶" \
+  --password=password123 \
+  --active=1 \
+  --role=expert
+```
+
+```bash 更新現有用戶
+php artisan cbdb:manage-user \
+  --email=user@example.com \
+  --role=expert
+```
+
+```bash 列出所有用戶
+php artisan cbdb:manage-user --list
+```
+</CodeGroup>
+
+### 可用選項
+
+| 選項 | 說明 | 可選值 |
+|------|------|--------|
+| `--email` | 用戶 Email（必填，用於查找或創建用戶） | 任何有效的 Email 地址 |
+| `--name` | 用戶名稱 | 任何字符串 |
+| `--password` | 用戶密碼（至少 6 個字符） | 至少 6 個字符的字符串 |
+| `--active` | 激活狀態 | `0`（未激活）、`1`（激活）、`2`（預留） |
+| `--role` | 用戶角色 | `regular`、`expert`、`crowdsourcing`、`super-admin` |
+| `--list` | 列出所有用戶 | - |
+
+## 創建用戶流程
+
+<Steps>
+  <Step title="準備用戶資訊">
+    確定新用戶的 Email、名稱、初始密碼、角色和啟用狀態。
+  </Step>
+  
+  <Step title="執行創建命令">
+    使用 `cbdb:manage-user` 命令創建用戶：
+    
+    ```bash
+    php artisan cbdb:manage-user \
+      --email=newuser@example.com \
+      --name="新用戶" \
+      --password=temp123456 \
+      --active=1 \
+      --role=regular
+    ```
+  </Step>
+  
+  <Step title="驗證創建結果">
+    命令執行成功後會顯示用戶信息表格，包含：
+    - 用戶 ID
+    - 名稱
+    - Email
+    - 激活狀態
+    - 角色
+    - 創建時間
+  </Step>
+  
+  <Step title="通知用戶">
+    將帳號資訊（Email 和初始密碼）安全地傳送給用戶，並建議用戶首次登入後修改密碼。
+  </Step>
+</Steps>
+
+## 更新用戶資訊
+
+### 修改用戶角色
+
+<Steps>
+  <Step title="確認用戶 Email">
+    找到要更新的用戶 Email 地址。
+  </Step>
+  
+  <Step title="執行更新命令">
+    ```bash
+    php artisan cbdb:manage-user \
+      --email=user@example.com \
+      --role=expert
+    ```
+  </Step>
+  
+  <Step title="驗證角色變更">
+    使用 `--list` 選項確認角色已更新：
+    
+    ```bash
+    php artisan cbdb:manage-user --list
+    ```
+  </Step>
+</Steps>
+
+### 啟用或停用用戶
+
+<Steps>
+  <Step title="選擇啟用狀態">
+    確定要設定的狀態：
+    - `1` = 啟用（允許寫入資料）
+    - `0` = 停用（拒絕寫入操作）
+  </Step>
+  
+  <Step title="執行狀態更新">
+    ```bash
+    php artisan cbdb:manage-user \
+      --email=user@example.com \
+      --active=0
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  停用用戶帳號（設為 `active=0`）會立即阻止該用戶執行任何資料寫入操作，但用戶仍可登入和查看資料。
+</Warning>
+
+### 重設用戶密碼
+
+<Steps>
+  <Step title="生成臨時密碼">
+    為用戶準備一組臨時密碼（至少 6 個字符）。
+  </Step>
+  
+  <Step title="執行密碼重設">
+    ```bash
+    php artisan cbdb:manage-user \
+      --email=user@example.com \
+      --password=newtemp123
+    ```
+  </Step>
+  
+  <Step title="通知用戶">
+    安全地將新密碼傳送給用戶，並要求首次登入後立即修改。
+  </Step>
+</Steps>
+
+## 用戶權限對照表
+
+| 動作 | 一般用戶 | 專家用戶 | 眾包用戶 | 系統管理員 |
+|------|---------|---------|---------|------------|
+| `/basicinformation` 新增/修改 | ✅ 直接寫入 | ✅ 直接寫入 + 審核提案 | ⚠️ 建立提案 | ✅ 直接寫入 + 審核提案 |
+| `/codes` 新增/修改 | ✅ 直接寫入 | ✅ 直接寫入 + 審核提案 | ⚠️ 建立提案 | ✅ 直接寫入 + 審核提案 |
+| `/operations` 審核提案、操作復原 | ❌ | ✅ | ❌ | ✅ |
+| `/crowdsourcing` 審核（Confirm） | ❌ | ✅ | ⚠️ 只能提交 | ✅ |
+| `/manage` 管理用戶帳號 | ❌ | ✅ | ❌ | ✅ |
+| `/admin/batch-load-*` 批次匯入 | ❌ | ✅ | ❌ | ✅ |
+| `/admin/audit-logs` 審計日誌 | ❌ | ❌ | ❌ | ✅ |
+
+## Email 確認功能
+
+系統會為新創建的用戶自動生成 `confirmation_token`（32 字符隨機字串），可用於實現 Email 確認流程。
+
+<Note>
+  目前 CBDB Online 的 Email 確認功能需配合前端流程實現。Token 已在用戶創建時自動生成，可用於後續開發。
+</Note>
+
+## 安全注意事項
+
+<Warning>
+  **保護管理員帳號**
+  
+  - 系統管理員和專家用戶擁有完整的資料修改權限
+  - 定期檢查管理員帳號列表，移除不再需要的權限
+  - 使用強密碼並定期更換
+  - 謹慎授予批次匯入和操作復原權限
+</Warning>
+
+<Warning>
+  **用戶資料隱私**
+  
+  - 密碼使用 bcrypt 加密存儲，無法還原明文
+  - 重設密碼時應使用安全通道傳送臨時密碼
+  - 建議要求用戶首次登入後立即修改密碼
+</Warning>
+
+## 疑難排解
+
+### 無法創建系統管理員
+
+**問題**：執行 `cbdb:manage-user --role=super-admin` 時發生錯誤。
+
+**解決方案**：
+1. 確認 Laravel 版本是否支援 `User` 模型的常量定義
+2. 檢查 `app/Models/User.php` 是否包含 `ROLE_SUPER_ADMIN` 常量
+3. 清除配置緩存：`php artisan config:clear`
+
+### 用戶無法執行寫入操作
+
+**問題**：用戶登入成功但無法新增或修改資料。
+
+**檢查清單**：
+1. 確認 `is_active = 1`（使用 `--list` 選項查看）
+2. 確認用戶角色不是「眾包用戶」（眾包用戶只能建立提案）
+3. 檢查 Controller 的授權邏輯是否正確
+
+### 找不到用戶記錄
+
+**問題**：使用 `--list` 找不到已創建的用戶。
+
+**解決方案**：
+1. 檢查資料庫連線設定
+2. 確認 `users` 資料表存在且包含記錄
+3. 使用資料庫工具直接查詢：`SELECT * FROM users WHERE email = 'xxx@example.com';`
+
+## 相關資源
+
+<CardGroup cols={2}>
+  <Card title="批次操作" icon="layer-group" href="/admin/batch-operations">
+    批次匯入書稿、官職、社會機構等資料
+  </Card>
+  
+  <Card title="審計日誌" icon="clock-rotate-left" href="/admin/audit-logs">
+    查看系統操作紀錄與資料變更歷史
+  </Card>
+  
+  <Card title="用戶權限說明" icon="shield-halved" href="https://github.com/cbdb-project/cbdb-online-main-server/blob/main/docs/USER_PRIVILEGES.md">
+    完整的權限系統文檔（GitHub）
+  </Card>
+  
+  <Card title="操作復原" icon="rotate-left" href="/features/operations-history">
+    查看和復原歷史操作記錄
+  </Card>
+</CardGroup>
